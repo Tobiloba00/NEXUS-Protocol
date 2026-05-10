@@ -1,18 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" shape-rendering="geometricPrecision">
   <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#c4b5fd"/>
-      <stop offset="35%" stop-color="#8b5cf6"/>
-      <stop offset="70%" stop-color="#6366f1"/>
+    <linearGradient id="m" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#c4b5fd"/>
+      <stop offset="35%"  stop-color="#8b5cf6"/>
+      <stop offset="70%"  stop-color="#6366f1"/>
       <stop offset="100%" stop-color="#22d3ee"/>
     </linearGradient>
     <linearGradient id="b" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="rgba(255,255,255,0.30)"/>
-      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="s" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#4c1d95"/>
+      <stop offset="100%" stop-color="#0e7490"/>
     </linearGradient>
   </defs>
-  <rect width="40" height="40" rx="9" fill="#0a0d18"/>
-  <rect x="0.5" y="0.5" width="39" height="39" rx="8.5" fill="none" stroke="rgba(255,255,255,0.06)"/>
-  <path d="M 7.5 6 L 13.5 6 L 25 22 L 25 6 L 31 6 L 31 32 L 25 32 L 13.5 16 L 13.5 32 L 7.5 32 Z" fill="url(#g)"/>
-  <path d="M 7.5 6 L 13.5 6 L 25 22 L 25 6 L 31 6 L 31 9 L 25 9 L 13.5 9 L 7.5 9 Z" fill="url(#b)" opacity="0.7"/>
+  <!-- Depth shadow (offset down-right, matches in-app NexusLogo) -->
+  <path d="M 9 7.5 L 15 7.5 L 26.5 23.5 L 26.5 7.5 L 32.5 7.5 L 32.5 33.5 L 26.5 33.5 L 15 17.5 L 15 33.5 L 9 33.5 Z"
+        fill="url(#s)" opacity="0.55"/>
+  <!-- Main N -->
+  <path d="M 7.5 6 L 13.5 6 L 25 22 L 25 6 L 31 6 L 31 32 L 25 32 L 13.5 16 L 13.5 32 L 7.5 32 Z"
+        fill="url(#m)"
+        stroke="#ffffff" stroke-opacity="0.18" stroke-width="0.4" stroke-linejoin="round"/>
+  <!-- Top bevel highlight -->
+  <path d="M 7.5 6 L 13.5 6 L 25 22 L 25 6 L 31 6 L 31 9 L 27 9 L 14 9 L 10.5 9 L 7.5 9 Z"
+        fill="url(#b)" opacity="0.7"/>
 </svg>
