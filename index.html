@@ -1,0 +1,3556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0d14" />
+<title>NEXUS Protocol — Markets, Collection & Governance</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@remix-run/router@1.15.3/dist/router.umd.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-router@6.22.3/dist/umd/react-router.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-router-dom@6.22.3/dist/umd/react-router-dom.production.min.js"></script>
+
+<script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+
+<script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script>
+  /* Apply persisted theme BEFORE first paint to avoid FOUC.
+     Default for first-time visitors: light. Users can still pick dark or auto. */
+  (function(){
+    try {
+      const stored = localStorage.getItem('nexus-theme');
+      if(stored === 'light' || stored === 'dark'){
+        document.documentElement.setAttribute('data-theme', stored);
+      } else if(stored === 'auto'){
+        // Honor system preference — no attribute set
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    } catch(_){
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  })();
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter','system-ui','sans-serif'],
+          mono: ['JetBrains Mono','ui-monospace','monospace'],
+        },
+        colors: {
+          bg:        'var(--bg)',
+          surface:   'var(--surface)',
+          'surface-2':'var(--surface-2)',
+          raised:    'var(--raised)',
+          hover:     'var(--hover)',
+          line:      'var(--line)',
+          'line-2':  'var(--line-2)',
+          ink: {
+            50:'var(--ink-50)', 100:'var(--ink-100)', 200:'var(--ink-200)',
+            300:'var(--ink-300)', 400:'var(--ink-400)', 500:'var(--ink-500)', 600:'var(--ink-600)',
+          },
+          accent:     'var(--accent)',
+          'accent-2': 'var(--accent-2)',
+          'accent-3': 'var(--accent-3)',
+          pos:        'var(--pos)',
+          neg:        'var(--neg)',
+          warn:       'var(--warn)',
+        },
+        borderRadius: { xl2: '14px' },
+      }
+    }
+  }
+</script>
+
+<style>
+  /* ─── DARK theme defaults ───────────────────────────────── */
+  :root{
+    --bg:        #0a0d18;
+    --surface:   #0f1424;
+    --surface-2: #131930;
+    --raised:    #161c33;
+    --hover:     rgba(255,255,255,0.04);
+    --line:      rgba(255,255,255,0.07);
+    --line-2:    rgba(255,255,255,0.12);
+
+    --ink-50:    #f1f3f8;
+    --ink-100:   #d8dde8;
+    --ink-200:   #b9c1d2;
+    --ink-300:   #9aa3b8;
+    --ink-400:   #7a8497;
+    --ink-500:   #5b6478;
+    --ink-600:   #444c5e;
+
+    --accent:    #8b5cf6;
+    --accent-hi: #a78bfa;
+    --accent-2:  #22d3ee;
+    --accent-3:  #ec4899;
+    --pos:       #10b981;
+    --neg:       #ef4444;
+    --warn:      #f59e0b;
+
+    --backdrop:    rgba(4,6,14,0.55);
+    --tooltip-bg:  rgba(15,20,36,0.96);
+    --tooltip-bd:  rgba(255,255,255,0.10);
+    --shadow-lg:   0 20px 60px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.25);
+    --shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset;
+    --grid-line:   rgba(255,255,255,0.04);
+    --primary-grad: linear-gradient(135deg,#8b5cf6 0%,#7c3aed 40%,#6366f1 100%);
+    --primary-grad-hi: linear-gradient(135deg,#a78bfa 0%,#8b5cf6 40%,#22d3ee 100%);
+    --chart-grid: rgba(255,255,255,0.05);
+    --primary-soft: rgba(139,92,246,0.10);
+
+    /* Premium polish */
+    --inset-hi:    rgba(255,255,255,0.06);
+    --inset-hi-2:  rgba(255,255,255,0.10);
+    --glow:        139,92,246;
+    --glow-2:      34,211,238;
+    --orb-opacity: 0.55;
+    --orb-blur:    90px;
+    --glow-text-strength: 0.45;
+    --halo-strength:      0.55;
+    --hover-lift-shadow:
+       0 18px 40px -16px rgba(139,92,246,0.30),
+       0 6px 16px -8px rgba(0,0,0,0.40),
+       inset 0 1px 0 var(--inset-hi-2);
+
+    color-scheme: dark;
+  }
+
+  /* ─── Light theme tokens (shared between system + manual) ── */
+  .__light-theme {} /* anchor for grep */
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:        #f4f6fb;
+      --surface:   #ffffff;
+      --surface-2: #fafbfd;
+      --raised:    #ffffff;
+      --hover:     rgba(15,20,36,0.04);
+      --line:      rgba(15,20,36,0.08);
+      --line-2:    rgba(15,20,36,0.14);
+      --ink-50:    #0e1424;
+      --ink-100:   #1a2238;
+      --ink-200:   #303a52;
+      --ink-300:   #4a5365;
+      --ink-400:   #6b7280;
+      --ink-500:   #8a93a3;
+      --ink-600:   #adb5bf;
+      --accent:    #7c3aed;
+      --accent-hi: #8b5cf6;
+      --accent-2:  #0891b2;
+      --accent-3:  #db2777;
+      --pos:       #059669;
+      --neg:       #dc2626;
+      --warn:      #d97706;
+      --backdrop:    rgba(15,20,36,0.35);
+      --tooltip-bg:  rgba(255,255,255,0.98);
+      --tooltip-bd:  rgba(15,20,36,0.12);
+      --shadow-lg:   0 24px 50px rgba(15,20,36,0.14), 0 4px 12px rgba(15,20,36,0.06);
+      --shadow-card: 0 1px 0 rgba(255,255,255,0.65) inset;
+      --grid-line:   rgba(15,20,36,0.06);
+      --primary-grad: linear-gradient(135deg,#7c3aed 0%,#6d28d9 40%,#4f46e5 100%);
+      --primary-grad-hi: linear-gradient(135deg,#8b5cf6 0%,#7c3aed 40%,#06b6d4 100%);
+      --chart-grid: rgba(15,20,36,0.06);
+      --primary-soft: rgba(124,58,237,0.10);
+      --inset-hi:    rgba(255,255,255,0.70);
+      --inset-hi-2:  rgba(255,255,255,0.85);
+      --glow:        124,58,237;
+      --glow-2:      8,145,178;
+      --orb-opacity: 0.35;
+      --orb-blur:    80px;
+      --hover-lift-shadow:
+         0 16px 36px -14px rgba(124,58,237,0.22),
+         0 6px 14px -8px rgba(15,20,36,0.10),
+         inset 0 1px 0 var(--inset-hi-2);
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:        #f4f6fb;
+    --surface:   #ffffff;
+    --surface-2: #fafbfd;
+    --raised:    #ffffff;
+    --hover:     rgba(15,20,36,0.04);
+    --line:      rgba(15,20,36,0.08);
+    --line-2:    rgba(15,20,36,0.14);
+    --ink-50:    #0e1424;
+    --ink-100:   #1a2238;
+    --ink-200:   #303a52;
+    --ink-300:   #4a5365;
+    --ink-400:   #6b7280;
+    --ink-500:   #8a93a3;
+    --ink-600:   #adb5bf;
+    --accent:    #7c3aed;
+    --accent-hi: #8b5cf6;
+    --accent-2:  #0891b2;
+    --accent-3:  #db2777;
+    --pos:       #059669;
+    --neg:       #dc2626;
+    --warn:      #d97706;
+    --backdrop:    rgba(15,20,36,0.35);
+    --tooltip-bg:  rgba(255,255,255,0.98);
+    --tooltip-bd:  rgba(15,20,36,0.12);
+    --shadow-lg:   0 24px 50px rgba(15,20,36,0.14), 0 4px 12px rgba(15,20,36,0.06);
+    --shadow-card: 0 1px 0 rgba(255,255,255,0.65) inset;
+    --grid-line:   rgba(15,20,36,0.06);
+    --primary-grad: linear-gradient(135deg,#7c3aed 0%,#6d28d9 40%,#4f46e5 100%);
+    --primary-grad-hi: linear-gradient(135deg,#8b5cf6 0%,#7c3aed 40%,#06b6d4 100%);
+    --chart-grid: rgba(15,20,36,0.06);
+    --primary-soft: rgba(124,58,237,0.10);
+    --inset-hi:    rgba(255,255,255,0.70);
+    --inset-hi-2:  rgba(255,255,255,0.85);
+    --glow:        124,58,237;
+    --glow-2:      8,145,178;
+    --orb-opacity: 0.35;
+    --orb-blur:    80px;
+    --glow-text-strength: 0.16;
+    --halo-strength:      0.28;
+    --hover-lift-shadow:
+       0 16px 36px -14px rgba(124,58,237,0.18),
+       0 6px 14px -8px rgba(15,20,36,0.08),
+       inset 0 1px 0 var(--inset-hi-2);
+    color-scheme: light;
+  }
+
+  *{ -webkit-tap-highlight-color: transparent; }
+  html, body, #root { height: 100%; }
+  body{
+    background: var(--bg);
+    color: var(--ink-50);
+    font-family:'Inter',system-ui,sans-serif;
+    font-feature-settings: 'cv11','ss01','ss03';
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    transition: background-color .25s ease, color .25s ease;
+  }
+
+  /* Ambient base — subtle radial + dot grid */
+  body::before{
+    content:""; position:fixed; inset:0; z-index:-3; pointer-events:none;
+    background:
+      radial-gradient(1100px 700px at 88% -8%, var(--primary-soft), transparent 60%),
+      radial-gradient(900px 500px at -8% 35%, rgba(var(--glow-2),0.07), transparent 60%);
+  }
+  body::after{
+    content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background-image: radial-gradient(circle, var(--line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 78%);
+    opacity:.55;
+  }
+
+  /* Ambient drifting orbs — slow, GPU-friendly */
+  .orbs{ position:fixed; inset:0; z-index:-2; pointer-events:none; overflow:hidden; will-change: transform; }
+  .orb{
+    position:absolute; border-radius:9999px; pointer-events:none;
+    filter: blur(var(--orb-blur)); opacity: var(--orb-opacity);
+    will-change: transform; mix-blend-mode: screen;
+  }
+  :root[data-theme="light"] .orb{ mix-blend-mode: multiply; opacity: 0.18; }
+  @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .orb{ mix-blend-mode: multiply; opacity: 0.18; } }
+  .orb-1{
+    width: 620px; height: 620px; top: -180px; right: -120px;
+    background: radial-gradient(closest-side, rgba(var(--glow),0.55), transparent 70%);
+    animation: orb-drift-1 32s ease-in-out infinite;
+  }
+  .orb-2{
+    width: 520px; height: 520px; bottom: -160px; left: -180px;
+    background: radial-gradient(closest-side, rgba(var(--glow-2),0.45), transparent 70%);
+    animation: orb-drift-2 38s ease-in-out infinite;
+  }
+  .orb-3{
+    width: 420px; height: 420px; top: 45%; left: 55%;
+    background: radial-gradient(closest-side, rgba(236,72,153,0.30), transparent 70%);
+    animation: orb-drift-3 44s ease-in-out infinite;
+    opacity: calc(var(--orb-opacity) * 0.6);
+  }
+  @keyframes orb-drift-1 { 0%,100%{ transform:translate3d(0,0,0) } 50%{ transform:translate3d(-50px,80px,0) } }
+  @keyframes orb-drift-2 { 0%,100%{ transform:translate3d(0,0,0) } 50%{ transform:translate3d(100px,-60px,0) } }
+  @keyframes orb-drift-3 { 0%,100%{ transform:translate3d(0,0,0) } 33%{ transform:translate3d(-80px,40px,0) } 66%{ transform:translate3d(60px,-30px,0) } }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-track{ background: transparent; }
+  ::-webkit-scrollbar-thumb{ background: var(--line); border-radius:8px; border:2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover{ background: var(--line-2); background-clip: padding-box; }
+
+  .tnum, .font-mono{ font-variant-numeric: tabular-nums; }
+
+  /* Surfaces — glass 2.0 with inset top highlight */
+  .surface{
+    background: var(--surface);
+    border:1px solid var(--line); border-radius: 14px;
+    box-shadow: inset 0 1px 0 var(--inset-hi), 0 1px 2px rgba(0,0,0,0.12);
+    position: relative;
+  }
+  .surface-2{
+    background: var(--surface-2);
+    border:1px solid var(--line); border-radius: 14px;
+    box-shadow: inset 0 1px 0 var(--inset-hi);
+  }
+  .surface-hover{ transition: border-color .25s ease, transform .25s cubic-bezier(.2,.7,.3,1), box-shadow .25s ease; }
+  .surface-hover:hover{
+    border-color: var(--line-2);
+    transform: translateY(-3px);
+    box-shadow: var(--hover-lift-shadow);
+  }
+
+  .glass{
+    background: color-mix(in oklab, var(--surface) 78%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    backdrop-filter: blur(24px) saturate(140%);
+    border-bottom:1px solid var(--line);
+    box-shadow: inset 0 1px 0 var(--inset-hi);
+  }
+
+  /* Buttons */
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+    border-radius: 10px; font-weight:500; font-size:.875rem;
+    padding: .55rem .9rem; white-space: nowrap; cursor: pointer;
+    transition: background .35s ease, background-position .6s ease, color .15s ease, border-color .2s ease, box-shadow .25s ease, transform .12s ease;
+  }
+  .btn:active{ transform: translateY(1px) scale(.985); }
+
+  /* Animated holographic gradient on primary */
+  .btn-primary{
+    background-image: var(--primary-grad);
+    background-size: 220% 220%;
+    background-position: 0% 0%;
+    color:#fff;
+    box-shadow:
+      0 8px 24px -8px rgba(var(--glow), calc(var(--glow-text-strength, 0.45) * 1.2)),
+      0 2px 6px rgba(0,0,0,0.18),
+      inset 0 1px 0 rgba(255,255,255,0.18);
+    position: relative; overflow: hidden;
+  }
+  .btn-primary::after{
+    content:""; position:absolute; inset:0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0.05) 55%, transparent 70%);
+    transform: translateX(-100%); transition: transform .8s ease;
+    pointer-events: none;
+  }
+  .btn-primary:hover{
+    background-image: var(--primary-grad-hi);
+    background-position: 100% 100%;
+    box-shadow:
+      0 14px 32px -8px rgba(var(--glow), calc(var(--glow-text-strength, 0.45) * 1.5)),
+      0 4px 10px rgba(0,0,0,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.24);
+  }
+  .btn-primary:hover::after{ transform: translateX(100%); }
+
+  .btn-secondary{ background: var(--surface); color: var(--ink-50); border:1px solid var(--line-2); box-shadow: inset 0 1px 0 var(--inset-hi); }
+  .btn-secondary:hover{ border-color: var(--line-2); background: var(--hover); box-shadow: inset 0 1px 0 var(--inset-hi), 0 4px 12px -4px rgba(var(--glow),0.18); }
+  .btn-ghost{ color: var(--ink-300); background: transparent; }
+  .btn-ghost:hover{ background: var(--hover); color: var(--ink-50); }
+  .btn-icon{ width:36px; height:36px; padding:0; }
+
+  /* Glow & numeric utilities (theme-aware via CSS vars) */
+  .text-glow{ text-shadow: 0 0 24px rgba(var(--glow), var(--glow-text-strength, 0.45)); }
+  .glow-soft{ box-shadow: 0 0 28px rgba(var(--glow), calc(var(--glow-text-strength, 0.45) * 0.5)); }
+  .glow-border{ box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(var(--glow), calc(var(--glow-text-strength, 0.45) * 0.8)); }
+  .num{ font-feature-settings:'tnum','ss01'; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+  /* Halo for live tokens & avatars */
+  .halo{ position: relative; isolation: isolate; }
+  .halo::before{
+    content:""; position:absolute; inset:-3px; border-radius:inherit; z-index:-1;
+    background: radial-gradient(closest-side, rgba(var(--glow), var(--halo-strength, 0.55)), transparent 70%);
+    filter: blur(8px); opacity: var(--halo-strength, 0.55);
+    animation: halo-pulse 2.8s ease-in-out infinite;
+  }
+  @keyframes halo-pulse{
+    0%,100%{ opacity: calc(var(--halo-strength, 0.55) * 0.85); transform:scale(.96) }
+    50%{    opacity: var(--halo-strength, 0.55);              transform:scale(1.10) }
+  }
+
+  /* Active sidebar bar with glow */
+  .nav-bar{ background: var(--accent); box-shadow: 0 0 12px rgba(var(--glow),0.6); }
+
+  .chip{
+    display:inline-flex; align-items:center; gap:.35rem;
+    padding:.2rem .55rem; border-radius:999px; font-size:11px; line-height:1.4;
+    background: var(--hover); border:1px solid var(--line); color: var(--ink-300);
+  }
+  .chip-pos{ background: rgba(16,185,129,0.10); border-color: rgba(16,185,129,0.30); color: var(--pos); }
+  .chip-neg{ background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.30); color: var(--neg); }
+  .chip-accent{ background: var(--primary-soft); border-color: rgba(139,92,246,0.32); color: var(--accent); }
+
+  .dot{ display:inline-block; width:6px; height:6px; border-radius:9999px; background: var(--pos); box-shadow:0 0 0 3px rgba(16,185,129,0.18), 0 0 10px rgba(16,185,129,0.55); }
+
+  /* Inputs */
+  .input{
+    width:100%; background: var(--bg); border:1px solid var(--line);
+    border-radius:10px; padding:.55rem .8rem; font-size:.875rem; color: var(--ink-50);
+    transition: border-color .15s ease, background-color .15s ease;
+  }
+  .input:focus{ outline:none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .input::placeholder{ color: var(--ink-500); }
+
+  /* Range */
+  input[type=range]{ -webkit-appearance:none; appearance:none; height:4px; background: var(--line); border-radius:8px; outline:none; }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background: var(--accent); cursor:pointer; border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  input[type=range]::-moz-range-thumb{ width:16px; height:16px; border-radius:50%; background: var(--accent); cursor:pointer; border:2px solid var(--surface); }
+
+  /* Switch */
+  .switch{ width:34px; height:20px; border-radius:9999px; padding:2px; cursor:pointer; transition: background-color .15s ease; background: var(--line); flex-shrink:0; }
+  .switch[data-on="true"]{ background: var(--accent); }
+  .switch > span{ display:block; width:16px; height:16px; border-radius:9999px; background:#fff; transition: transform .18s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .switch[data-on="true"] > span{ transform: translateX(14px); }
+
+  /* Recharts */
+  .recharts-default-tooltip{
+    background: var(--tooltip-bg) !important;
+    border:1px solid var(--tooltip-bd) !important;
+    border-radius:10px !important;
+    padding:8px 10px !important;
+    box-shadow: var(--shadow-lg);
+  }
+  .recharts-tooltip-label{ color: var(--ink-400) !important; font-size:11px !important; margin-bottom:4px !important; }
+  .recharts-tooltip-item{ color: var(--ink-50) !important; font-size:12px !important; }
+  .recharts-tooltip-cursor{ stroke: var(--line-2) !important; }
+
+  @keyframes fadeIn { from { opacity:0; transform: translateY(6px) } to { opacity:1; transform: translateY(0) } }
+  .fade-in{ animation: fadeIn .28s cubic-bezier(.2,.7,.3,1); }
+
+  /* Diagonal sheen shimmer (replaces flat linear wipe) */
+  .skel{
+    position: relative; overflow: hidden;
+    background: var(--hover); border-radius:6px;
+  }
+  .skel::after{
+    content:""; position:absolute; inset:0;
+    background: linear-gradient(115deg, transparent 25%, var(--inset-hi-2) 50%, transparent 75%);
+    transform: translateX(-100%);
+    animation: skel-sheen 1.6s linear infinite;
+  }
+  @keyframes skel-sheen { 0%{ transform: translateX(-100%); } 100%{ transform: translateX(100%); } }
+
+  .ob-bar{ position:absolute; top:0; bottom:0; right:0; transform-origin: right; opacity:.12; pointer-events:none; }
+
+  .row-hover{ transition: background-color .12s ease; }
+  .row-hover:hover{ background-color: var(--hover); }
+
+  :focus-visible{ outline: 2px solid var(--accent); outline-offset:2px; border-radius:6px; }
+  button:focus { outline: none; }
+  button:focus-visible{ outline: 2px solid var(--accent); outline-offset:2px; }
+
+  .no-scrollbar::-webkit-scrollbar{ display:none; }
+  .no-scrollbar{ -ms-overflow-style:none; scrollbar-width:none; }
+
+  .backdrop{ position:fixed; inset:0; background: var(--backdrop); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+
+  /* Sidebar wave decoration */
+  .sidebar-wave{
+    position:absolute; left:0; right:0; bottom:0; height:120px; pointer-events:none; opacity:.5;
+    background: radial-gradient(120% 100% at 0% 100%, rgba(139,92,246,0.30), transparent 60%);
+    mask-image: linear-gradient(180deg, transparent, black 80%);
+  }
+
+  /* Live pulse */
+  @keyframes liveRing { 0%{ box-shadow:0 0 0 0 rgba(16,185,129,0.6) } 100%{ box-shadow:0 0 0 8px rgba(16,185,129,0) } }
+  .pulse{ animation: liveRing 1.6s ease-out infinite; }
+
+  /* Reduce motion */
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="orbs" aria-hidden="true">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="env,react">
+/* eslint-disable */
+const { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext, Fragment } = React;
+const { HashRouter, Routes, Route, NavLink, Link, useLocation, Outlet, useNavigate } = ReactRouterDOM;
+const {
+  ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ComposedChart, ReferenceLine, RadialBarChart, RadialBar
+} = Recharts;
+
+/* ─────────────────────────────────────────────────────────
+   PROJECT CONFIG — change once to rebrand
+   ───────────────────────────────────────────────────────── */
+const PROJECT_CONFIG = {
+  name: "NEXUS Protocol",
+  shortName: "nexus",
+  ticker: "NXS",
+  network: "Solana",
+  contract: "Nx5pR0t0c0L2Tx7vQwK2pRmL4Z5n1DfH3JvA8YsBcNxEfR",
+  features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
+};
+
+/* ─────────────────────────────────────────────────────────
+   ICONS — Lucide via createIcons (cached, no global rescans)
+   ───────────────────────────────────────────────────────── */
+function Icon({ name, size=16, strokeWidth=1.75, className="" }){
+  const ref = useRef(null);
+  useEffect(()=>{
+    if(!ref.current || !window.lucide) return;
+    ref.current.innerHTML = '';
+    const slot = document.createElement('i');
+    slot.setAttribute('data-lucide', name);
+    ref.current.appendChild(slot);
+    window.lucide.createIcons({
+      attrs: { width: String(size), height: String(size), 'stroke-width': String(strokeWidth) },
+      nameAttr: 'data-lucide',
+    });
+  }, [name, size, strokeWidth]);
+  return <span ref={ref} className={"inline-flex items-center justify-center "+className} style={{lineHeight:0}}/>;
+}
+
+/* ─────────────────────────────────────────────────────────
+   TOKEN MARK — circular monogram with deterministic color
+   ───────────────────────────────────────────────────────── */
+const MARK_PALETTE = [
+  ["#4f8df9","#1e3a8a"],
+  ["#22d3ee","#0e7490"],
+  ["#a78bfa","#5b21b6"],
+  ["#f472b6","#9d174d"],
+  ["#34d399","#065f46"],
+  ["#fbbf24","#92400e"],
+  ["#fb923c","#9a3412"],
+  ["#e879f9","#7e22ce"],
+];
+function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i))|0; return Math.abs(h); }
+function TokenMark({ symbol, size=28 }){
+  const palette = MARK_PALETTE[hashStr(symbol||"X") % MARK_PALETTE.length];
+  const initials = (symbol||"?").slice(0,2).toUpperCase();
+  const fs = size <= 20 ? 9 : size <= 28 ? 11 : size <= 40 ? 13 : 16;
+  const id = "tg-"+symbol;
+  return (
+    <span className="inline-flex items-center justify-center rounded-full overflow-hidden flex-shrink-0" style={{ width:size, height:size }}>
+      <svg viewBox="0 0 40 40" width={size} height={size}>
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={palette[0]}/>
+            <stop offset="100%" stopColor={palette[1]}/>
+          </linearGradient>
+        </defs>
+        <circle cx="20" cy="20" r="20" fill={`url(#${id})`}/>
+        <circle cx="20" cy="20" r="19.5" fill="none" stroke="rgba(255,255,255,0.10)"/>
+        <text x="20" y="20" textAnchor="middle" dominantBaseline="central"
+              fontFamily="Inter,sans-serif" fontWeight="700" fontSize={fs} fill="#fff" letterSpacing="0.5">
+          {initials}
+        </text>
+      </svg>
+    </span>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   UTILS
+   ───────────────────────────────────────────────────────── */
+const fmt = {
+  usd:(n,d=2)=> '$'+(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}),
+  num:(n,d=0)=> (Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}),
+  compact:(n)=>{ const x=Number(n)||0;
+    if(Math.abs(x)>=1e9) return (x/1e9).toFixed(2)+'B';
+    if(Math.abs(x)>=1e6) return (x/1e6).toFixed(2)+'M';
+    if(Math.abs(x)>=1e3) return (x/1e3).toFixed(2)+'K';
+    return x.toFixed(0);
+  },
+  pct:(n,d=2)=> (n>=0?'+':'')+Number(n).toFixed(d)+'%',
+  short:(a,h=4,t=4)=> a ? a.slice(0,h)+'…'+a.slice(-t) : '',
+  ago:(t)=>{ const s=Math.max(1,Math.floor((Date.now()-t)/1000));
+    if(s<60) return s+'s';
+    if(s<3600) return Math.floor(s/60)+'m';
+    if(s<86400) return Math.floor(s/3600)+'h';
+    return Math.floor(s/86400)+'d';
+  }
+};
+
+function rng(seed){ let a=seed|0; return ()=>{ a=(a*1664525+1013904223)|0; return ((a>>>0)/4294967295); }; }
+
+function genWallet(seed){
+  const r = rng(seed||Math.floor(Math.random()*1e9));
+  const chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let s = "";
+  for(let i=0;i<44;i++) s += chars[Math.floor(r()*chars.length)];
+  return s;
+}
+const networkAddr = (seed) => genWallet(seed);
+
+function genCandles(n, start, drift, vol, seed){
+  const r = rng(seed); const out=[]; let p=start; let t = Date.now()-n*60000;
+  for(let i=0;i<n;i++){
+    const open=p;
+    const ch = (r()-0.485)*vol*p + drift*p;
+    const close=Math.max(0.0001, open+ch);
+    const high=Math.max(open,close)*(1 + r()*0.01);
+    const low=Math.min(open,close)*(1 - r()*0.01);
+    const volume = (r()*1.2+0.4) * (p*1_000_000);
+    out.push({ t:t+i*60000, time:new Date(t+i*60000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}), open, high, low, close, volume });
+    p=close;
+  }
+  return out;
+}
+
+const TOKENS = [
+  { symbol: PROJECT_CONFIG.ticker, name: PROJECT_CONFIG.name,    price: 2.34,   change: 12.40, mcap: 234_000_000, vol: 18_400_000, holders: 24_812 },
+  { symbol: "USDC",                 name: "USD Coin",            price: 1.00,   change:  0.01, mcap: 32_000_000_000, vol: 4_100_000_000, holders: 1_200_000 },
+  { symbol: "SOL",                  name: "Solana",              price: 184.21, change:  3.20, mcap: 86_000_000_000, vol: 2_400_000_000, holders: 1_900_000 },
+  { symbol: "JUP",                  name: "Jupiter",             price: 0.812,  change:  4.70, mcap: 1_120_000_000, vol: 142_000_000, holders: 412_300 },
+  { symbol: "JTO",                  name: "Jito",                price: 3.41,   change: -2.10, mcap: 388_000_000, vol: 64_000_000, holders: 144_200 },
+  { symbol: "PYTH",                 name: "Pyth Network",        price: 0.412,  change: -8.90, mcap: 1_490_000_000, vol: 88_000_000, holders: 88_400 },
+  { symbol: "RAY",                  name: "Raydium",             price: 2.04,   change:  1.90, mcap: 588_000_000, vol: 24_000_000, holders: 102_800 },
+  { symbol: "BONK",                 name: "Bonk",                price: 0.000022, change: 22.40, mcap: 1_710_000_000, vol: 240_000_000, holders: 612_400 },
+];
+
+const NFT_NAMES = [
+  "Once a Dreamer","Sacred Memory","Echoes of Twilight","Borrowed Light",
+  "When Stars Drift","The Quiet Garden","After Rain","Untitled (Becoming)",
+  "Last Summer Light","Wandering Sleep","A Soft Defeat","Hourglass Spirit",
+  "The Long Wait","Glass Memories","Field Notes","Nightfall, Slowly",
+  "Bloom in Static","Halfway Home","Inner Weather","All My Ghosts",
+  "Soft Static","Anyone, Anywhere","Mira, Vanishing","The Patient Hour"
+];
+const ARTISTS = [
+  "lorcan","osiris","elnaz555","kira.eth","akira","noumena",
+  "vellum","kael","glo","mirandanoir","ven","tessa.b"
+];
+const NFT_TRAITS = {
+  Medium:  ["Photograph","Generative","Painting","3D Render","Mixed Media"],
+  Edition: ["1 of 1","1 of 10","1 of 25","Open Edition"],
+  Mood:    ["Quiet","Ethereal","Vivid","Solemn","Luminous"],
+  Rarity:  ["Common","Rare","Epic","Legendary","Mythic"],
+};
+const RARITY_COLORS = { Common:"#7a8497", Rare:"#4f8df9", Epic:"#a78bfa", Legendary:"#fbbf24", Mythic:"#f472b6" };
+
+const nftImg = (seed, w=640, h=800) => `https://picsum.photos/seed/nexus${seed}/${w}/${h}`;
+const artistAvatar = (handle) => `https://picsum.photos/seed/artist-${encodeURIComponent(handle)}/56/56`;
+
+function genNFT(i, seed=i){
+  const r = rng(seed*7+13);
+  const rarities = NFT_TRAITS.Rarity;
+  const rarity = rarities[Math.min(rarities.length-1, Math.floor(Math.pow(r(),3)*rarities.length))];
+  const price = (rarity==="Mythic"? 8+r()*4 : rarity==="Legendary"? 4+r()*4 : rarity==="Epic"? 2+r()*2.5 : rarity==="Rare"? 0.8+r()*1.4 : 0.3+r()*0.7);
+  const id = String(1000 + Math.floor(r()*8999));
+  return {
+    id, seed,
+    name: NFT_NAMES[i % NFT_NAMES.length],
+    artist: ARTISTS[Math.floor(r()*ARTISTS.length)],
+    verified: r() > 0.4,
+    price: parseFloat(price.toFixed(2)),
+    rarity,
+    traits: {
+      Medium:  NFT_TRAITS.Medium[Math.floor(r()*NFT_TRAITS.Medium.length)],
+      Edition: NFT_TRAITS.Edition[Math.floor(r()*NFT_TRAITS.Edition.length)],
+      Mood:    NFT_TRAITS.Mood[Math.floor(r()*NFT_TRAITS.Mood.length)],
+      Rarity:  rarity,
+    },
+    auction: r() > 0.2,
+    auctionEndsIn: Math.floor(r()*60*60*72) + 60*60,
+    likes: Math.floor(r()*900),
+    owner: networkAddr(seed*9+1),
+    sales: Math.floor(r()*50) + 1,
+  };
+}
+const NFT_GRID = Array.from({length: 24}, (_, i) => genNFT(i, i*3+11));
+
+/* Drop-in image component — uses picsum for stable seeded photos.
+   Falls back to a gradient block on error. */
+function NFTArt({ seed=1, size=320, w, h, className="" }){
+  const [error, setError] = useState(false);
+  const W = w || size;
+  const H = h || size;
+  if(error){
+    const r = rng(seed*97+5);
+    const a = Math.floor(r()*360), b = (a + 60 + Math.floor(r()*120)) % 360;
+    return (
+      <div className={"w-full h-full flex items-center justify-center text-ink-300 "+className}
+        style={{ background:`linear-gradient(135deg, hsl(${a},40%,18%), hsl(${b},40%,8%))`, aspectRatio: `${W}/${H}` }}>
+        <Icon name="image" size={28}/>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={nftImg(seed, W, H)}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={()=>setError(true)}
+      className={"w-full h-full object-cover bg-hover "+className}
+      style={{ display:'block' }}
+    />
+  );
+}
+
+const TX_TYPES = ["Swap","Transfer","Stake","Unstake","Claim","Mint","List","Bid","Sale"];
+function genTx(i){
+  const r = rng(i*31+7);
+  const type = TX_TYPES[Math.floor(r()*TX_TYPES.length)];
+  const tokenA = TOKENS[Math.floor(r()*TOKENS.length)];
+  const amt = parseFloat((r()*5000+5).toFixed(2));
+  return {
+    id: i, type, tokenA, amount: amt, usd: amt * tokenA.price,
+    from: networkAddr(i*3+1), to: networkAddr(i*3+2),
+    time: Date.now() - Math.floor(r()*1000*60*60),
+    txHash: ("tx"+(i*991).toString(16).padStart(8,'0')+(i*7).toString(16)).slice(0,18),
+  };
+}
+
+function genOrderBook(mid){
+  const r = rng(99);
+  const bids=[], asks=[];
+  for(let i=0;i<14;i++){
+    bids.push({ price: mid*(1-(i+1)*0.0015 - r()*0.0003), size: r()*8000+200, total:0 });
+    asks.push({ price: mid*(1+(i+1)*0.0015 + r()*0.0003), size: r()*8000+200, total:0 });
+  }
+  let cb=0; bids.forEach(b=>{cb+=b.size; b.total=cb;});
+  let ca=0; asks.forEach(a=>{ca+=a.size; a.total=ca;});
+  return { bids, asks };
+}
+
+const HOLDER_DIST = [
+  { tier: "Whales (>1%)",         count: 12,    percent: 23.4, color: "#f87171" },
+  { tier: "Sharks (0.1–1%)",      count: 84,    percent: 19.6, color: "#fbbf24" },
+  { tier: "Dolphins (0.01–0.1%)", count: 412,   percent: 22.1, color: "#4f8df9" },
+  { tier: "Fish (0.001–0.01%)",   count: 1820,  percent: 17.8, color: "#a78bfa" },
+  { tier: "Plankton (<0.001%)",   count: 22484, percent: 17.1, color: "#22d3ee" },
+];
+
+const PROPOSALS = [
+  { id:"CIP-042", title:"Increase staking rewards APR from 12.4% to 15.8%",       status:"active", endsIn:60*60*22,  for:4_120_000, against:1_240_000, abstain:220_000, author:networkAddr(101), category:"Treasury" },
+  { id:"CIP-041", title:"Allocate 250K TIME to community grants Q3",              status:"active", endsIn:60*60*68,  for:2_350_000, against:980_000,   abstain:110_000, author:networkAddr(102), category:"Grants" },
+  { id:"CIP-040", title:"Onboard new validator (Aetheria Labs)",                  status:"active", endsIn:60*60*4,   for:5_120_000, against:320_000,   abstain:88_000,  author:networkAddr(103), category:"Validators" },
+  { id:"CIP-039", title:"Reduce protocol swap fee 0.30% → 0.25%",                 status:"passed", endsIn:0,         for:6_400_000, against:1_120_000, abstain:90_000,  author:networkAddr(104), category:"Protocol" },
+  { id:"CIP-038", title:"Treasury diversification into stablecoin reserves",      status:"failed", endsIn:0,         for:1_400_000, against:4_120_000, abstain:320_000, author:networkAddr(105), category:"Treasury" },
+  { id:"CIP-037", title:"Enable cross-chain bridge to Aetheria L2",               status:"passed", endsIn:0,         for:7_900_000, against:480_000,   abstain:120_000, author:networkAddr(106), category:"Protocol" },
+];
+
+const STAKING_POOLS = [
+  { name: PROJECT_CONFIG.ticker+" Single",  symbol: PROJECT_CONFIG.ticker, apr:12.4, tvl:18_400_000, lockOptions:[0,7,30,90,180,365], minMul:1.0, maxMul:2.4 },
+  { name: PROJECT_CONFIG.ticker+"-USDC LP", symbol: "LP",                  apr:38.7, tvl: 9_200_000, lockOptions:[0,7,30,90],         minMul:1.0, maxMul:1.8 },
+  { name: "JUP Staking",                    symbol: "JUP",                 apr:22.1, tvl: 4_100_000, lockOptions:[0,30,90,180],       minMul:1.0, maxMul:2.1 },
+  { name: "Genesis Pool",                   symbol: PROJECT_CONFIG.ticker, apr:64.2, tvl: 2_400_000, lockOptions:[30,90,180,365],     minMul:1.2, maxMul:3.0 },
+];
+
+const FEATURED_COLLECTIONS = [
+  { name: "Chronoglyphs Genesis", floor:1.84, items:8888,  owners:4012, vol24:184.2 },
+  { name: "Temporal Shards",      floor:0.92, items:5000,  owners:2304, vol24:92.8 },
+  { name: "Aeon Sentinels",       floor:3.41, items:3333,  owners:1810, vol24:122.6 },
+  { name: "Voidkeepers",          floor:0.42, items:12000, owners:6840, vol24:41.3 },
+];
+
+/* ─────────────────────────────────────────────────────────
+   APP CONTEXT
+   ───────────────────────────────────────────────────────── */
+const AppCtx = createContext(null);
+function AppProvider({ children }){
+  const [wallet, setWallet] = useState(null);
+  const [showWallet, setShowWallet] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [proView, setProView] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [activeTxModal, setActiveTxModal] = useState(null);
+  const [activeNFT, setActiveNFT] = useState(null);
+  const [activeStakeModal, setActiveStakeModal] = useState(null);
+  const theme = useTheme();
+
+  const pushToast = useCallback((t) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts(p => [...p, { id, ...t }]);
+    setTimeout(()=> setToasts(p => p.filter(x=>x.id!==id)), t.duration || 3500);
+  }, []);
+
+  useEffect(()=>{
+    const h = (e) => {
+      if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); setShowSearch(s=>!s); }
+      if(e.key === '/' && !e.metaKey && !e.ctrlKey){ e.preventDefault(); setShowSearch(true); }
+    };
+    window.addEventListener('keydown', h);
+    return ()=> window.removeEventListener('keydown', h);
+  }, []);
+
+  useEffect(()=>{
+    const anyOpen = showSidebar || showWallet || showSearch || showFilters || activeTxModal || activeNFT || activeStakeModal;
+    document.body.style.overflow = anyOpen ? 'hidden' : '';
+  }, [showSidebar, showWallet, showSearch, showFilters, activeTxModal, activeNFT, activeStakeModal]);
+
+  return (
+    <AppCtx.Provider value={{
+      wallet, setWallet,
+      showWallet, setShowWallet,
+      showSearch, setShowSearch,
+      showSidebar, setShowSidebar,
+      sidebarCollapsed, setSidebarCollapsed,
+      showFilters, setShowFilters,
+      proView, setProView,
+      pushToast, toasts,
+      activeTxModal, setActiveTxModal,
+      activeNFT, setActiveNFT,
+      activeStakeModal, setActiveStakeModal,
+      theme,
+    }}>{children}</AppCtx.Provider>
+  );
+}
+const useApp = () => useContext(AppCtx);
+
+/* ─────────────────────────────────────────────────────────
+   SHARED COMPONENTS
+   ───────────────────────────────────────────────────────── */
+function CountUp({ value=0, decimals=0, prefix="", suffix="", duration=700, className="" }){
+  const [n, setN] = useState(value);
+  const startVal = useRef(value);
+  useEffect(()=>{
+    const from = startVal.current;
+    const to = Number(value)||0;
+    const start = performance.now();
+    let raf;
+    const tick = (t)=>{
+      const k = Math.min(1, (t-start)/duration);
+      const eased = 1 - Math.pow(1-k, 3);
+      setN(from + (to-from)*eased);
+      if(k<1) raf = requestAnimationFrame(tick);
+      else startVal.current = to;
+    };
+    raf = requestAnimationFrame(tick);
+    return ()=> cancelAnimationFrame(raf);
+  }, [value, duration]);
+  const formatted = decimals>0 ? n.toLocaleString(undefined,{minimumFractionDigits:decimals,maximumFractionDigits:decimals}) : Math.round(n).toLocaleString();
+  return <span className={"tnum "+className}>{prefix}{formatted}{suffix}</span>;
+}
+
+function useLivePrice(initial, vol=0.003, every=2000){
+  const [p, setP] = useState(initial);
+  const [dir, setDir] = useState(0);
+  useEffect(()=>{
+    const t = setInterval(()=>{
+      setP(prev => {
+        const ch = (Math.random()-0.49)*vol*prev;
+        setDir(ch>=0?1:-1);
+        return Math.max(0.0001, prev+ch);
+      });
+    }, every);
+    return ()=> clearInterval(t);
+  }, [vol, every]);
+  return [p, dir];
+}
+
+function Sparkline({ data, color="#4f8df9", height=28 }){
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{top:2,right:0,left:0,bottom:2}}>
+        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.4} dot={false} isAnimationActive={false}/>
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   THEME
+   ───────────────────────────────────────────────────────── */
+function useTheme(){
+  const [pref, setPref] = useState(()=> {
+    try { return localStorage.getItem('nexus-theme') || 'light'; } catch(_){ return 'light'; }
+  });
+  const [resolved, setResolved] = useState(()=> {
+    const explicit = document.documentElement.getAttribute('data-theme');
+    if(explicit) return explicit;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  });
+
+  useEffect(()=>{
+    try { localStorage.setItem('nexus-theme', pref); } catch(_){}
+    if(pref === 'auto'){
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', pref);
+    }
+    const update = () => {
+      const explicit = document.documentElement.getAttribute('data-theme');
+      if(explicit) setResolved(explicit);
+      else setResolved(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    };
+    update();
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const h = () => { if(pref === 'auto') update(); };
+    mq.addEventListener?.('change', h);
+    return ()=> mq.removeEventListener?.('change', h);
+  }, [pref]);
+
+  return { pref, setPref, resolved };
+}
+
+function ThemeToggle({ className="" }){
+  const { pref, setPref, resolved } = useApp().theme;
+  const next = pref === 'auto' ? 'light' : pref === 'light' ? 'dark' : 'auto';
+  const icon = pref === 'auto' ? 'monitor' : pref === 'light' ? 'sun' : 'moon';
+  const title = pref === 'auto' ? `Auto (${resolved})` : pref === 'light' ? 'Light' : 'Dark';
+  return (
+    <button onClick={()=>setPref(next)} className={"btn btn-ghost btn-icon "+className} title={'Theme: '+title} aria-label={'Theme: '+title}>
+      <Icon name={icon} size={16}/>
+    </button>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   LAYOUT — Sidebar (drawer on mobile), Header, Main
+   ───────────────────────────────────────────────────────── */
+const NAV_GROUPS = [
+  { items: [{ to:"/", label:"Overview", icon:"layout-dashboard" }] },
+  { label:"Trade", items: [
+    { to:"/marketplace", label:"NFTs",        icon:"image",       flag:"showNFTs" },
+    { to:"/analytics",   label:"Watchlist",   icon:"line-chart",  flag:"showAnalytics" },
+  ]},
+  { label:"Earn", items: [
+    { to:"/staking",     label:"Stake",       icon:"layers",      flag:"showStaking" },
+    { to:"/governance",  label:"Governance",  icon:"vote",        flag:"showGovernance" },
+  ]},
+  { label:"Account", items: [
+    { to:"/profile",     label:"Portfolio",   icon:"wallet" },
+  ]},
+];
+const NAV = NAV_GROUPS.flatMap(g => g.items);
+
+let _nxLogoCounter = 0;
+function NexusLogo({ size=28 }){
+  /* Unique IDs per instance — fixes duplicate-id bug where defs from the
+     first instance bled into subsequent instances and broke gradients. */
+  const uid = useMemo(()=> 'nx'+(++_nxLogoCounter), []);
+  const idMain   = uid+'-main';
+  const idBevel  = uid+'-bevel';
+  const idShadow = uid+'-shadow';
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" style={{display:'block', flexShrink:0}}>
+      <defs>
+        <linearGradient id={idMain} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stopColor="#c4b5fd"/>
+          <stop offset="35%"  stopColor="#8b5cf6"/>
+          <stop offset="70%"  stopColor="#6366f1"/>
+          <stop offset="100%" stopColor="#22d3ee"/>
+        </linearGradient>
+        <linearGradient id={idBevel} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stopColor="rgba(255,255,255,0.55)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </linearGradient>
+        <linearGradient id={idShadow} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stopColor="#4c1d95"/>
+          <stop offset="100%" stopColor="#0e7490"/>
+        </linearGradient>
+      </defs>
+      {/* Depth shadow (offset down-right) */}
+      <path
+        d="M 9 7.5 L 15 7.5 L 26.5 23.5 L 26.5 7.5 L 32.5 7.5 L 32.5 33.5 L 26.5 33.5 L 15 17.5 L 15 33.5 L 9 33.5 Z"
+        fill={`url(#${idShadow})`} opacity="0.55"
+      />
+      {/* Main N */}
+      <path
+        d="M 7.5 6 L 13.5 6 L 25 22 L 25 6 L 31 6 L 31 32 L 25 32 L 13.5 16 L 13.5 32 L 7.5 32 Z"
+        fill={`url(#${idMain})`}
+        stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" strokeLinejoin="round"
+      />
+      {/* Top bevel highlight */}
+      <path
+        d="M 7.5 6 L 13.5 6 L 25 22 L 25 6 L 31 6 L 31 9 L 27 9 L 14 9 L 10.5 9 L 7.5 9 Z"
+        fill={`url(#${idBevel})`} opacity="0.7"
+      />
+    </svg>
+  );
+}
+
+function Sidebar(){
+  const { showSidebar, setShowSidebar, sidebarCollapsed, setSidebarCollapsed } = useApp();
+  const loc = useLocation();
+  useEffect(()=>{ setShowSidebar(false); }, [loc.pathname]);
+
+  const groups = NAV_GROUPS.map(g => ({
+    ...g,
+    items: g.items.filter(n => !n.flag || PROJECT_CONFIG.features[n.flag]),
+  })).filter(g => g.items.length);
+
+  const Inner = ({ collapsed, isMobile }) => (
+    <div className={"relative flex flex-col h-full "+(collapsed?"px-2":"px-3")+" py-4"}>
+      <div className={"flex items-center "+(collapsed?"justify-center":"justify-between")+" mb-6 px-1"}>
+        <Link to="/" className="flex items-center gap-2.5">
+          <NexusLogo size={28}/>
+          {!collapsed && (
+            <div className="leading-none">
+              <div className="font-semibold text-[14px] tracking-tight">NEXUS</div>
+              <div className="text-[9px] tracking-[0.22em] text-ink-500 font-medium mt-1">PROTOCOL</div>
+            </div>
+          )}
+        </Link>
+        {!collapsed && !isMobile && (
+          <button onClick={()=>setSidebarCollapsed(v=>!v)} className="hidden lg:inline-flex btn btn-ghost btn-icon w-8 h-8" aria-label="Collapse sidebar">
+            <Icon name="panel-left-close" size={14}/>
+          </button>
+        )}
+        {!collapsed && isMobile && (
+          <button onClick={()=>setShowSidebar(false)} className="btn btn-ghost btn-icon w-8 h-8" aria-label="Close menu">
+            <Icon name="x" size={16}/>
+          </button>
+        )}
+      </div>
+
+      <nav className="flex flex-col gap-4 overflow-y-auto no-scrollbar pr-1">
+        {groups.map((g, gi) => (
+          <div key={gi} className="flex flex-col gap-0.5">
+            {g.label && !collapsed && (
+              <div className="px-3 pb-1.5 pt-1 text-[10px] uppercase tracking-[0.12em] text-ink-500 font-medium">{g.label}</div>
+            )}
+            {g.label && collapsed && gi>0 && <div className="border-t border-line my-1.5 mx-2"/>}
+            {g.items.map(n => (
+              <NavLink end={n.to==="/"} to={n.to} key={n.to}
+                title={collapsed ? n.label : undefined}
+                className={({isActive}) =>
+                  "group relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] transition-all duration-200 "+
+                  (isActive
+                    ? "bg-[var(--primary-soft)] text-ink-50"
+                    : "text-ink-300 hover:bg-hover hover:text-ink-50 hover:translate-x-0.5")
+                }>
+                {({isActive}) => (
+                  <>
+                    {isActive && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r nav-bar"/>}
+                    <Icon name={n.icon} size={16} className={"transition-transform group-hover:scale-110 "+(isActive?"text-accent":"")}/>
+                    {!collapsed && <span className="flex-1">{n.label}</span>}
+                    {!collapsed && isActive && <span className="dot"/>}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
+        ))}
+      </nav>
+
+      <div className="mt-auto pt-4 relative z-10">
+        {!collapsed ? (
+          <div className="px-3 py-3 rounded-xl2 border border-line bg-hover">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2 text-[12px] text-ink-200 font-medium">{PROJECT_CONFIG.network} Network</div>
+              <span className="text-[10px] text-pos flex items-center gap-1"><span className="dot"/> Online</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10.5px] text-ink-400 font-mono">
+              <div>Slot</div><div className="text-ink-100 text-right">231,841,209</div>
+              <div>Block Time</div><div className="text-ink-100 text-right">412 ms</div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-center py-3"><span className="dot"/></div>
+        )}
+        {collapsed && !isMobile && (
+          <button onClick={()=>setSidebarCollapsed(false)} className="hidden lg:flex w-full btn btn-ghost mt-2 justify-center" aria-label="Expand sidebar">
+            <Icon name="panel-left-open" size={14}/>
+          </button>
+        )}
+      </div>
+      <div className="sidebar-wave"/>
+    </div>
+  );
+
+  return (
+    <>
+      {showSidebar && <div className="backdrop fixed inset-0 z-40 lg:hidden" onClick={()=>setShowSidebar(false)}/>}
+      <aside className={
+        "fixed top-0 left-0 z-50 h-full w-[260px] border-r border-line bg-surface lg:hidden transition-transform "+
+        (showSidebar ? "translate-x-0" : "-translate-x-full")
+      }>
+        <Inner collapsed={false} isMobile={true}/>
+      </aside>
+
+      <aside className={
+        "hidden lg:flex fixed top-0 left-0 z-30 h-full border-r border-line bg-surface transition-[width] "+
+        (sidebarCollapsed ? "w-[68px]" : "w-[238px]")
+      }>
+        <Inner collapsed={sidebarCollapsed} isMobile={false}/>
+      </aside>
+    </>
+  );
+}
+
+function PageMeta(){
+  const loc = useLocation();
+  const map = {
+    "/":            { title:"Markets",     sub:`Real-time data from ${PROJECT_CONFIG.network} blockchain`, live:true },
+    "/marketplace": { title:"NFTs",         sub:"Browse, mint and trade collections",                       live:false },
+    "/staking":     { title:"Stake",        sub:"Earn rewards by locking your tokens",                      live:false },
+    "/governance":  { title:"Governance",   sub:"Vote on protocol changes with your stake",                 live:false },
+    "/analytics":   { title:"Analytics",    sub:"On-chain intelligence and trends",                         live:true  },
+    "/profile":     { title:"Portfolio",    sub:"Your assets, history and settings",                        live:false },
+  };
+  return map[loc.pathname] || map["/"];
+}
+
+function Header(){
+  const { wallet, setShowWallet, setShowSearch, setShowSidebar, sidebarCollapsed } = useApp();
+  const meta = PageMeta();
+
+  const SearchBtn = ({ wide }) => (
+    <button onClick={()=>setShowSearch(true)}
+      className={"flex items-center gap-2 px-3.5 h-10 rounded-full bg-surface border border-line hover:border-line-2 text-ink-400 text-[13px] transition-colors "+(wide?"w-[300px] xl:w-[420px]":"w-full max-w-[420px]")}>
+      <Icon name="search" size={14}/>
+      <span className="flex-1 text-left truncate">Search markets or tokens…</span>
+      <kbd className="text-[10px] font-mono text-ink-500 px-1.5 py-0.5 rounded border border-line flex-shrink-0">/</kbd>
+    </button>
+  );
+
+  const WalletCluster = () => (
+    <>
+      <ThemeToggle/>
+      <button className="btn btn-ghost btn-icon hidden sm:inline-flex relative" aria-label="Notifications">
+        <Icon name="bell" size={16}/>
+        <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-accent-3"/>
+      </button>
+      {!wallet ? (
+        <button onClick={()=>setShowWallet(true)} className="btn btn-primary">
+          <Icon name="wallet" size={14}/>
+          <span className="hidden sm:inline">Connect</span>
+        </button>
+      ) : (
+        <button onClick={()=>setShowWallet(true)} className="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-full border border-line-2 bg-surface hover:bg-hover transition-all duration-200 hover:shadow-[0_0_22px_-4px_rgba(var(--glow),0.45)]">
+          <span className="halo rounded-full"><Identicon seed={wallet.seed} size={28}/></span>
+          <span className="hidden sm:inline font-mono text-[13px]">{fmt.short(wallet.address, 4, 4)}</span>
+          <Icon name="chevron-down" size={14} className="text-ink-400"/>
+        </button>
+      )}
+    </>
+  );
+
+  return (
+    <header className={"sticky top-0 z-20 glass "+(sidebarCollapsed?"lg:pl-[68px]":"lg:pl-[238px]")}>
+      {/* Mobile bar (< lg) */}
+      <div className="lg:hidden flex items-center gap-2 min-h-[60px] px-3">
+        <button onClick={()=>setShowSidebar(true)} className="btn btn-ghost btn-icon" aria-label="Open menu">
+          <Icon name="menu" size={18}/>
+        </button>
+        <Link to="/" className="flex items-center gap-2 min-w-0">
+          <NexusLogo size={22}/>
+          <span className="font-semibold text-[15px] truncate">{meta.title}</span>
+          {meta.live && <span className="chip chip-pos text-[10px] flex-shrink-0 hidden sm:inline-flex"><span className="dot pulse"/> Live</span>}
+        </Link>
+        <div className="flex-1"/>
+        <button onClick={()=>setShowSearch(true)} className="btn btn-ghost btn-icon" aria-label="Search">
+          <Icon name="search" size={16}/>
+        </button>
+        <WalletCluster/>
+      </div>
+
+      {/* Desktop bar (lg+) — flex with equal flex-1 sides so the search stays mathematically centered */}
+      <div className="hidden lg:flex items-center min-h-[68px] px-6 gap-4">
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <div className="flex items-center gap-2">
+            <h1 className="text-[18px] font-semibold tracking-tight truncate leading-tight">{meta.title}</h1>
+            {meta.live && <span className="chip chip-pos text-[10px] flex-shrink-0"><span className="dot pulse"/> Live</span>}
+          </div>
+          <p className="text-[12px] text-ink-400 truncate leading-tight mt-0.5">{meta.sub}</p>
+        </div>
+
+        <div className="flex-shrink-0">
+          <SearchBtn wide/>
+        </div>
+
+        <div className="flex-1 min-w-0 flex items-center gap-2 justify-end">
+          <WalletCluster/>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function useNow(every=1000){
+  const [t, setT] = useState(()=> new Date());
+  useEffect(()=>{ const x = setInterval(()=> setT(new Date()), every); return ()=> clearInterval(x); }, [every]);
+  return t;
+}
+
+function MobileTabs(){
+  return (
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bg/95 backdrop-blur border-t border-line">
+      <div className="flex pb-[env(safe-area-inset-bottom)]">
+        {NAV.filter(n=>!n.flag||PROJECT_CONFIG.features[n.flag]).slice(0,5).map(n => (
+          <NavLink end={n.to==="/"} to={n.to} key={n.to}
+            className={({isActive}) => "flex-1 flex flex-col items-center gap-1 py-2.5 text-[10.5px] transition-colors "+(isActive?"text-ink-50":"text-ink-400")}>
+            <Icon name={n.icon} size={17}/>
+            <span>{n.label}</span>
+          </NavLink>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   IDENTICON
+   ───────────────────────────────────────────────────────── */
+function Identicon({ seed=1, size=24 }){
+  const palette = ['#4f8df9','#a78bfa','#22d3ee','#34d399','#f472b6','#fbbf24','#fb923c'];
+  const r = rng(typeof seed === 'string' ? hashStr(seed) : seed);
+  const c1 = palette[Math.floor(r()*palette.length)];
+  const c2 = palette[Math.floor(r()*palette.length)];
+  return (
+    <span className="inline-flex flex-shrink-0 rounded-full overflow-hidden" style={{ width:size, height:size }}>
+      <svg width={size} height={size} viewBox="0 0 32 32">
+        <rect width="32" height="32" fill={c1}/>
+        <circle cx={r()*32} cy={r()*32} r="9" fill={c2} opacity="0.8"/>
+        <rect x={r()*22} y={r()*22} width="10" height="10" fill={c1} opacity="0.4"/>
+      </svg>
+    </span>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   MODAL
+   ───────────────────────────────────────────────────────── */
+function Modal({ open, onClose, title, children, size="md" }){
+  useEffect(()=>{
+    const h = (e)=>{ if(e.key==='Escape') onClose(); };
+    if(open) window.addEventListener('keydown', h);
+    return ()=> window.removeEventListener('keydown', h);
+  }, [open, onClose]);
+  if(!open) return null;
+  const widthClass = { sm:"max-w-sm", md:"max-w-md", lg:"max-w-2xl", xl:"max-w-4xl" }[size];
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4" onMouseDown={onClose}>
+      <div className="backdrop"/>
+      <div onMouseDown={e=>e.stopPropagation()}
+        className={"relative bg-surface border border-line w-full sm:rounded-xl rounded-t-xl shadow-2xl flex flex-col fade-in max-h-[92vh] sm:max-h-[88vh] "+widthClass}>
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-line flex-shrink-0">
+          <h3 className="font-semibold text-[15px]">{title}</h3>
+          <button onClick={onClose} className="btn btn-ghost btn-icon" aria-label="Close">
+            <Icon name="x" size={16}/>
+          </button>
+        </div>
+        <div className="px-4 sm:px-5 py-4 overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   WALLET MODAL
+   ───────────────────────────────────────────────────────── */
+const WALLETS = [
+  { id:'phantom',       label:'Phantom',        desc:'Solana, Ethereum & Bitcoin',     color:'#ab9ff2' },
+  { id:'solflare',      label:'Solflare',       desc:'Native Solana wallet',           color:'#fbbf24' },
+  { id:'backpack',      label:'Backpack',       desc:'xNFT-native multi-chain',        color:'#f87171' },
+  { id:'walletconnect', label:'WalletConnect',  desc:'Scan with mobile wallet',        color:'#3b82f6' },
+  { id:'metamask',      label:'MetaMask',       desc:'Most popular EVM wallet',        color:'#fb923c' },
+  { id:'ledger',        label:'Ledger',         desc:'Hardware wallet',                color:'#9aa3b3' },
+];
+function WalletGlyph({ color }){
+  return (
+    <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg" style={{ background: color+'1f', border:'1px solid '+color+'40' }}>
+      <span className="w-3.5 h-3.5 rounded-sm" style={{ background: color }}/>
+    </span>
+  );
+}
+
+function WalletModal(){
+  const { showWallet, setShowWallet, wallet, setWallet, pushToast } = useApp();
+  const [connecting, setConnecting] = useState(null);
+  if(!showWallet) return null;
+
+  const connect = (opt) => {
+    setConnecting(opt.id);
+    setTimeout(()=>{
+      const seed = Date.now() & 0xffff;
+      const w = { provider: opt, address: networkAddr(seed), balance: parseFloat((1.2 + Math.random()*8).toFixed(3)), seed };
+      setWallet(w);
+      setConnecting(null);
+      setShowWallet(false);
+      pushToast({ kind:'success', title:'Connected', body: opt.label+' · '+fmt.short(w.address,5,4) });
+    }, 900);
+  };
+
+  return (
+    <Modal open onClose={()=>setShowWallet(false)} title={wallet?"Wallet":"Connect a wallet"} size="md">
+      {wallet ? (
+        <div className="space-y-3">
+          <div className="surface px-4 py-3 flex items-center gap-3">
+            <Identicon seed={wallet.seed} size={36}/>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] text-ink-400">{wallet.provider.label}</div>
+              <div className="font-mono text-[13px] truncate">{fmt.short(wallet.address, 8, 8)}</div>
+            </div>
+            <button onClick={()=>{ navigator.clipboard?.writeText(wallet.address); pushToast({kind:'success',title:'Address copied'}); }} className="btn btn-secondary btn-icon" aria-label="Copy">
+              <Icon name="copy" size={14}/>
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="surface px-3 py-2.5">
+              <div className="text-[11px] text-ink-400">Balance</div>
+              <div className="font-mono text-[15px] mt-0.5">{wallet.balance.toFixed(3)} SOL</div>
+            </div>
+            <div className="surface px-3 py-2.5">
+              <div className="text-[11px] text-ink-400">{PROJECT_CONFIG.ticker}</div>
+              <div className="font-mono text-[15px] mt-0.5">12,401.50</div>
+            </div>
+          </div>
+          <button onClick={()=>{ setWallet(null); setShowWallet(false); pushToast({kind:'info',title:'Disconnected'}); }}
+            className="w-full btn btn-secondary text-neg justify-center">
+            <Icon name="log-out" size={14}/> Disconnect
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-[13px] text-ink-400 mb-3">{PROJECT_CONFIG.name} doesn't store your keys. Wallets sign transactions on your device.</p>
+          {WALLETS.map(opt => (
+            <button key={opt.id} onClick={()=>connect(opt)} disabled={!!connecting}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-line hover:border-line-2 hover:bg-hover transition text-left disabled:opacity-50">
+              <WalletGlyph color={opt.color}/>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[14px]">{opt.label}</div>
+                <div className="text-[12px] text-ink-400 truncate">{opt.desc}</div>
+              </div>
+              {connecting===opt.id ? <span className="text-[11px] text-ink-400">Connecting…</span> :
+                <Icon name="chevron-right" size={14} className="text-ink-500"/>}
+            </button>
+          ))}
+          <p className="text-[11px] text-ink-500 text-center pt-3">By connecting you agree to the Terms of Service & Privacy Policy.</p>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   SEARCH (⌘K)
+   ───────────────────────────────────────────────────────── */
+function SearchModal(){
+  const { showSearch, setShowSearch } = useApp();
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+  useEffect(()=>{ if(showSearch) setTimeout(()=> ref.current?.focus(), 30); }, [showSearch]);
+  if(!showSearch) return null;
+  const lower = q.toLowerCase();
+  const tokenHits = TOKENS.filter(t=>t.symbol.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)).slice(0,5);
+  const navHits = NAV.filter(n=>n.label.toLowerCase().includes(lower)).slice(0,4);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[8vh] sm:pt-24 px-3" onMouseDown={()=>setShowSearch(false)}>
+      <div className="backdrop"/>
+      <div onMouseDown={e=>e.stopPropagation()} className="relative w-full max-w-xl bg-surface border border-line rounded-xl shadow-2xl overflow-hidden fade-in">
+        <div className="flex items-center gap-2 px-4 h-12 border-b border-line">
+          <Icon name="search" size={15} className="text-ink-400"/>
+          <input ref={ref} value={q} onChange={e=>setQ(e.target.value)}
+            placeholder="Search tokens, addresses, NFTs, proposals…"
+            className="flex-1 bg-transparent outline-none text-[14px] placeholder:text-ink-500"/>
+          <kbd className="text-[10px] font-mono text-ink-500 px-1.5 py-0.5 rounded border border-line">esc</kbd>
+        </div>
+        <div className="max-h-[55vh] overflow-y-auto">
+          {(tokenHits.length===0 && navHits.length===0 && q) && <div className="p-6 text-center text-[13px] text-ink-400">No results</div>}
+          {tokenHits.length>0 && (
+            <div className="px-2 py-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 px-2.5 py-1.5">Tokens</div>
+              {tokenHits.map(t => (
+                <Link key={t.symbol} to="/" onClick={()=>setShowSearch(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-hover">
+                  <TokenMark symbol={t.symbol} size={26}/>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px]">{t.symbol} <span className="text-ink-400 ml-1">{t.name}</span></div>
+                    <div className="text-[11px] text-ink-500 font-mono">{fmt.usd(t.price, t.price<1?4:2)}</div>
+                  </div>
+                  <span className={"text-[12px] tnum "+(t.change>=0?"text-pos":"text-neg")}>{fmt.pct(t.change,1)}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+          {navHits.length>0 && (
+            <div className="px-2 py-1.5 border-t border-line">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 px-2.5 py-1.5">Pages</div>
+              {navHits.map(n => (
+                <Link key={n.to} to={n.to} onClick={()=>setShowSearch(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-hover">
+                  <Icon name={n.icon} size={15} className="text-ink-400"/>
+                  <span className="text-[13px]">{n.label}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+          {!q && (
+            <div className="px-2 py-1.5 border-t border-line">
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 px-2.5 py-1.5">Quick actions</div>
+              {[
+                ["/staking","layers","Stake "+PROJECT_CONFIG.ticker],
+                ["/governance","vote","Vote on active proposals"],
+                ["/marketplace","image","Browse NFT collections"],
+              ].map(([to,icon,label])=>(
+                <Link key={to} to={to} onClick={()=>setShowSearch(false)} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-hover">
+                  <Icon name={icon} size={15} className="text-ink-400"/>
+                  <span className="text-[13px]">{label}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   TOAST HOST
+   ───────────────────────────────────────────────────────── */
+function ToastHost(){
+  const { toasts } = useApp();
+  return (
+    <div className="fixed top-3 right-3 z-[80] flex flex-col gap-2 max-w-[calc(100vw-1.5rem)] sm:max-w-sm">
+      {toasts.map(t => (
+        <div key={t.id} className="bg-raised border border-line-2 rounded-lg px-3 py-2.5 shadow-xl flex items-start gap-2.5 fade-in">
+          <Icon name={t.kind==='success'?'check-circle':t.kind==='error'?'alert-circle':'info'} size={15}
+            className={t.kind==='success'?'text-pos':t.kind==='error'?'text-neg':'text-accent'}/>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium">{t.title}</div>
+            {t.body && <div className="text-[12px] text-ink-400 mt-0.5 truncate">{t.body}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   STAT CARD
+   ───────────────────────────────────────────────────────── */
+function StatCard({ label, value, change, prefix="", suffix="", decimals=0, hot=false }){
+  const positive = (change||0) >= 0;
+  return (
+    <div className="surface surface-hover px-4 py-3.5 relative overflow-hidden">
+      <div className="absolute top-0 left-3 right-3 h-px" style={{background:'linear-gradient(90deg, transparent, var(--accent), transparent)', opacity:.55}}/>
+      <div className="absolute -right-8 -top-8 w-24 h-24 rounded-full pointer-events-none" style={{background:'radial-gradient(closest-side, rgba(var(--glow),0.12), transparent 70%)', filter:'blur(6px)'}}/>
+      <div className="relative">
+        <div className="text-[11px] uppercase tracking-wider text-ink-400">{label}</div>
+        <div className={"mt-1.5 text-[22px] font-semibold tracking-tight num "+(hot?"text-glow":"")}>
+          <CountUp value={value} decimals={decimals} prefix={prefix} suffix={suffix}/>
+        </div>
+        {change !== undefined && (
+          <div className={"mt-1 text-[12px] flex items-center gap-1 "+(positive?"text-pos":"text-neg")}>
+            <Icon name={positive?"trending-up":"trending-down"} size={12}/>
+            <span className="tnum">{fmt.pct(change,2)}</span>
+            <span className="text-ink-500">24h</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   MARKETS / DASHBOARD
+   ───────────────────────────────────────────────────────── */
+function PriceChartCard(){
+  const [tf, setTf] = useState("1H");
+  const [data, setData] = useState(()=> genCandles(120, 2.34, 0.0008, 0.018, 42));
+  const [hover, setHover] = useState(null);
+
+  useEffect(()=>{
+    const t = setInterval(()=>{
+      setData(prev=>{
+        const last = prev[prev.length-1];
+        const ch = (Math.random()-0.485)*0.018*last.close;
+        const close = Math.max(0.0001, last.close+ch);
+        const open = last.close;
+        const next = { t:last.t+60000, time:new Date(last.t+60000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}), open, high: Math.max(open,close)*(1+Math.random()*0.005), low: Math.min(open,close)*(1-Math.random()*0.005), close, volume:(Math.random()*1.2+0.4)*close*1_000_000 };
+        return [...prev.slice(-119), next];
+      });
+    }, 2400);
+    return ()=> clearInterval(t);
+  }, []);
+
+  useEffect(()=>{
+    const params = { "1H":[60,2.34,0.0006,0.012], "4H":[120,2.30,0.0008,0.018], "1D":[180,2.05,0.0012,0.022], "1W":[200,1.80,0.0014,0.028], "1M":[200,1.20,0.002,0.04], "ALL":[220,0.40,0.003,0.05] }[tf];
+    setData(genCandles(params[0], params[1], params[2], params[3], 42));
+  }, [tf]);
+
+  const last = data[data.length-1];
+  const first = data[0];
+  const pct = ((last.close-first.close)/first.close)*100;
+  const high = Math.max(...data.map(d=>d.high));
+  const low  = Math.min(...data.map(d=>d.low));
+
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <span className="halo rounded-full"><TokenMark symbol={PROJECT_CONFIG.ticker} size={32}/></span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-[16px] font-semibold tracking-tight truncate">{PROJECT_CONFIG.ticker}/USDC</h2>
+                <span className="chip chip-pos"><span className="dot"/> Live</span>
+              </div>
+              <div className="text-[11px] text-ink-500 font-mono mt-0.5 truncate">{fmt.short(PROJECT_CONFIG.contract,6,6)}</div>
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2 flex-wrap">
+            <span className="text-[28px] sm:text-[32px] font-semibold tracking-tight num text-glow">{fmt.usd(hover?.close ?? last.close, 4)}</span>
+            <span className={(pct>=0?"text-pos":"text-neg")+" text-[13px] font-medium tnum"}>{fmt.pct(pct,2)}</span>
+            <span className="text-[11px] text-ink-500 uppercase">{tf}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-400">
+            <span>High <span className="text-ink-100 font-mono">{fmt.usd(high,4)}</span></span>
+            <span>Low <span className="text-ink-100 font-mono">{fmt.usd(low,4)}</span></span>
+            <span>Vol <span className="text-ink-100 font-mono">{fmt.compact(data.reduce((s,d)=>s+d.volume,0))}</span></span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 bg-bg rounded-lg p-1 border border-line w-fit overflow-x-auto no-scrollbar">
+          {["1H","4H","1D","1W","1M","ALL"].map(x => (
+            <button key={x} onClick={()=>setTf(x)}
+              className={"px-2.5 py-1 text-[12px] rounded-md transition-colors flex-shrink-0 "+(tf===x?"bg-hover text-ink-50":"text-ink-400 hover:text-ink-50")}>{x}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 h-[260px] sm:h-[300px] -mx-1">
+        <ResponsiveContainer>
+          <ComposedChart data={data} margin={{top:8,right:8,left:0,bottom:0}}
+            onMouseMove={(s)=>{ if(s?.activePayload?.[0]) setHover(s.activePayload[0].payload); }}
+            onMouseLeave={()=>setHover(null)}>
+            <defs>
+              <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.30"/>
+                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
+            <XAxis dataKey="time" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false} minTickGap={42}/>
+            <YAxis yAxisId="price" orientation="right" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}
+              domain={['auto','auto']} tickFormatter={v=>'$'+v.toFixed(2)} width={48}/>
+            <YAxis yAxisId="vol" orientation="left" hide domain={[0,'dataMax * 4']}/>
+            <Tooltip cursor={{ stroke:'rgba(255,255,255,0.18)', strokeDasharray:'3 3' }}
+              formatter={(v,n)=>[n==='close'?fmt.usd(v,4):fmt.compact(v), n==='close'?'Price':'Volume']}
+              labelFormatter={l=>l}/>
+            <Bar yAxisId="vol" dataKey="volume" fill="rgba(255,255,255,0.08)" maxBarSize={3}/>
+            <Area yAxisId="price" type="monotone" dataKey="close" stroke="#8b5cf6" strokeWidth={1.6} fill="url(#pg)" isAnimationActive={false}/>
+            <ReferenceLine yAxisId="price" y={last.close} stroke="#22d3ee" strokeDasharray="3 3" strokeOpacity={0.4}/>
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function StatGrid(){
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <StatCard label="24h Volume" value={18_400_000} prefix="$" change={12.4} hot/>
+      <StatCard label="Market Cap" value={234_000_000} prefix="$" change={-2.1}/>
+      <StatCard label="Holders" value={24812} change={4.6}/>
+      <StatCard label="Total Value Locked" value={42_100_000} prefix="$" change={8.2}/>
+    </div>
+  );
+}
+
+function PortfolioCard(){
+  const data = [
+    { name: PROJECT_CONFIG.ticker, value: 28969.00, color: '#8b5cf6' },
+    { name: "USDC",                 value: 12712.10, color: '#22d3ee' },
+    { name: "SOL",                  value:  9166.75, color: '#fbbf24' },
+    { name: "JUP",                  value:  6055.21, color: '#ec4899' },
+    { name: "Others",               value:  4237.37, color: '#7a8497' },
+  ];
+  const total = data.reduce((s,d)=>s+d.value,0);
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[14px] font-semibold">My Portfolio</h3>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-wider text-ink-500">Total Value</div>
+          <div className="text-[20px] font-semibold tracking-tight"><CountUp value={total} prefix="$" decimals={2}/></div>
+          <div className="text-[11px] text-pos">+8.4%</div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="w-[148px] h-[148px] flex-shrink-0 relative">
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={48} outerRadius={70} paddingAngle={2} startAngle={90} endAngle={-270} stroke="none">
+                {data.map((d,i)=>(<Cell key={i} fill={d.color}/>))}
+              </Pie>
+              <Tooltip formatter={v=>fmt.usd(v,2)}/>
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div className="text-[9px] uppercase tracking-wider text-ink-500">Assets</div>
+            <div className="text-[16px] font-semibold">{data.length}</div>
+          </div>
+        </div>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {data.map(d => {
+            const pct = (d.value/total)*100;
+            return (
+              <div key={d.name} className="flex items-center gap-2 text-[12px]">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background:d.color}}/>
+                <span className="text-ink-100 font-medium w-12">{d.name}</span>
+                <span className="text-ink-400 tnum w-8 text-right">{pct.toFixed(0)}%</span>
+                <span className="ml-auto text-ink-200 tnum font-mono">{fmt.usd(d.value,2)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <Link to="/profile" className="mt-4 w-full flex items-center justify-center gap-1 text-[12.5px] text-ink-200 hover:text-ink-50 py-2 border-t border-line">
+        View Full Portfolio <Icon name="arrow-right" size={12}/>
+      </Link>
+    </div>
+  );
+}
+
+function TopMoversCard(){
+  const movers = useMemo(()=> {
+    return TOKENS.map((t,i) => {
+      const data = Array.from({length: 24}, (_,k)=> ({ v: Math.max(0.0001, t.price * (1 + (Math.sin(k*0.5+i)+Math.random()*0.6-0.3)*0.05)) }));
+      return { ...t, spark: data };
+    }).sort((a,b)=> b.change-a.change);
+  }, []);
+  return (
+    <div className="surface">
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-line">
+        <h3 className="text-[14px] font-semibold">Top movers</h3>
+        <Link to="/analytics" className="text-[12px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1">All <Icon name="chevron-right" size={12}/></Link>
+      </div>
+      <div className="divide-y divide-line">
+        {movers.slice(0, 6).map(t => (
+          <div key={t.symbol} className="flex items-center gap-3 px-4 sm:px-5 py-2.5 row-hover">
+            <TokenMark symbol={t.symbol} size={28}/>
+            <div className="min-w-0 flex-shrink-0">
+              <div className="text-[13px] font-medium">{t.symbol}</div>
+              <div className="text-[11px] text-ink-500 font-mono">{fmt.usd(t.price, t.price<1?4:2)}</div>
+            </div>
+            <div className="flex-1 h-7 min-w-0"><Sparkline data={t.spark} color={t.change>=0?'#10b981':'#ef4444'}/></div>
+            <div className={"text-right text-[12px] tnum font-medium "+(t.change>=0?"text-pos":"text-neg")}>
+              {fmt.pct(t.change,1)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OrderBookCard(){
+  const [book, setBook] = useState(()=> genOrderBook(2.34));
+  const [mid, setMid] = useState(2.34);
+  useEffect(()=>{
+    const t = setInterval(()=> setMid(m => Math.max(0.001, m + (Math.random()-0.5)*0.005)), 2200);
+    return ()=> clearInterval(t);
+  }, []);
+  useEffect(()=>{ setBook(genOrderBook(mid)); }, [mid]);
+  const maxTotal = Math.max(book.asks[book.asks.length-1].total, book.bids[book.bids.length-1].total);
+  const spread = ((book.asks[0].price-book.bids[0].price)/mid*100).toFixed(2);
+
+  return (
+    <div className="surface">
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-line">
+        <h3 className="text-[14px] font-semibold">Order book</h3>
+        <span className="chip">Spread <span className="text-ink-100 ml-1 font-mono">{spread}%</span></span>
+      </div>
+      <div className="p-3 sm:p-4">
+        <div className="grid grid-cols-3 text-[10px] uppercase tracking-wider text-ink-500 px-1 pb-2">
+          <span>Price</span><span className="text-right">Size</span><span className="text-right hidden sm:block">Total</span>
+        </div>
+        <div className="space-y-px">
+          {book.asks.slice().reverse().slice(0,8).map((a,i)=>(
+            <div key={"a"+i} className="relative grid grid-cols-3 text-[12px] font-mono py-0.5 px-1">
+              <div className="ob-bar bg-neg" style={{ transform:`scaleX(${a.total/maxTotal})` }}/>
+              <span className="relative text-neg">{a.price.toFixed(4)}</span>
+              <span className="relative text-right text-ink-100">{fmt.compact(a.size)}</span>
+              <span className="relative text-right text-ink-500 hidden sm:block">{fmt.compact(a.total)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="my-2 py-2 border-y border-line text-center">
+          <div className="text-[16px] font-semibold tracking-tight tnum">{fmt.usd(mid,4)}</div>
+          <div className="text-[10px] text-ink-500">mid</div>
+        </div>
+        <div className="space-y-px">
+          {book.bids.slice(0,8).map((b,i)=>(
+            <div key={"b"+i} className="relative grid grid-cols-3 text-[12px] font-mono py-0.5 px-1">
+              <div className="ob-bar bg-pos" style={{ transform:`scaleX(${b.total/maxTotal})` }}/>
+              <span className="relative text-pos">{b.price.toFixed(4)}</span>
+              <span className="relative text-right text-ink-100">{fmt.compact(b.size)}</span>
+              <span className="relative text-right text-ink-500 hidden sm:block">{fmt.compact(b.total)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TxFeedCard({ rows=10 }){
+  const [feed, setFeed] = useState(()=> Array.from({length: rows*2}, (_,i)=>genTx(i)));
+  useEffect(()=>{
+    const t = setInterval(()=>{
+      setFeed(prev => {
+        const next = genTx(prev.length+1);
+        next.time = Date.now();
+        return [next, ...prev.slice(0, 49)];
+      });
+    }, 2400);
+    return ()=> clearInterval(t);
+  }, []);
+  const colorFor = (type) => {
+    if(["Swap","Stake","Mint","Bid","Sale"].includes(type)) return 'text-pos';
+    if(["Unstake"].includes(type)) return 'text-neg';
+    return 'text-ink-100';
+  };
+  return (
+    <div className="surface">
+      <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-line">
+        <h3 className="text-[14px] font-semibold">Recent transactions</h3>
+        <span className="chip"><span className="dot"/> Streaming</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wider text-ink-500">
+              <th className="text-left font-normal py-2 pl-4 sm:pl-5">Type</th>
+              <th className="text-left font-normal py-2 hidden sm:table-cell">From</th>
+              <th className="text-left font-normal py-2 hidden md:table-cell">To</th>
+              <th className="text-right font-normal py-2">Amount</th>
+              <th className="text-right font-normal py-2 hidden sm:table-cell">Value</th>
+              <th className="text-right font-normal py-2 pr-4 sm:pr-5">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+          {feed.slice(0, rows).map(tx => (
+            <tr key={tx.id} className="row-hover border-t border-line">
+              <td className={"py-2 pl-4 sm:pl-5 font-medium "+colorFor(tx.type)}>{tx.type}</td>
+              <td className="py-2 font-mono text-ink-300 hidden sm:table-cell">{fmt.short(tx.from,4,4)}</td>
+              <td className="py-2 font-mono text-ink-300 hidden md:table-cell">{fmt.short(tx.to,4,4)}</td>
+              <td className="py-2 text-right font-mono">{fmt.compact(tx.amount)} {tx.tokenA.symbol}</td>
+              <td className="py-2 text-right font-mono text-ink-400 hidden sm:table-cell">{fmt.usd(tx.usd,0)}</td>
+              <td className="py-2 pr-4 sm:pr-5 text-right text-ink-500 tnum">{fmt.ago(tx.time)}</td>
+            </tr>
+          ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function YourAssets(){
+  const assets = [
+    { symbol: PROJECT_CONFIG.ticker, amount: 12401.5, value: 28959.5, change: 12.4 },
+    { symbol: "USDC", amount: 12400.00, value: 12400, change: 0.0 },
+    { symbol: "SOL", amount: 49.92, value: 9192, change: 3.2 },
+  ];
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[14px] font-semibold">Your assets</h3>
+        <Link to="/profile" className="text-[12px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1">All <Icon name="chevron-right" size={12}/></Link>
+      </div>
+      <div className="space-y-1.5">
+        {assets.map(a => (
+          <div key={a.symbol} className="flex items-center gap-3 px-2 py-2 rounded-lg row-hover">
+            <TokenMark symbol={a.symbol} size={32}/>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-[13px]">{a.symbol}</div>
+              <div className="text-[11px] text-ink-500 font-mono">{fmt.num(a.amount, a.amount<1?4:2)}</div>
+            </div>
+            <div className="text-right">
+              <div className="font-mono text-[13px]">{fmt.usd(a.value,0)}</div>
+              <div className={"text-[11px] tnum "+(a.change>=0?"text-pos":"text-neg")}>{fmt.pct(a.change,1)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-line mt-3 pt-3">
+        <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Featured NFTs</div>
+        <div className="grid grid-cols-3 gap-2">
+          {[1,2,3].map(i => (
+            <div key={i} className="aspect-square rounded-lg overflow-hidden border border-line">
+              <NFTArt seed={i*7+11} size={120}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecentActivityCard(){
+  const items = [
+    { kind:"Swap",        icon:"arrow-down-up", desc:"USDC → TIME", amt:"+368.42 TIME", up:true,  ago:"2m" },
+    { kind:"Deposit",     icon:"arrow-down",    desc:"USDC",        amt:"+1,000.00 USDC", up:true, ago:"15m" },
+    { kind:"Stake",       icon:"layers",        desc:"TIME",        amt:"−250.00 TIME",  up:false, ago:"1h" },
+    { kind:"Claim Reward",icon:"gift",          desc:"Staking",     amt:"+12.45 TIME",   up:true,  ago:"3h" },
+  ];
+  const tint = (k) => ({
+    "Swap":        ["#10b981","rgba(16,185,129,0.10)"],
+    "Deposit":     ["#22d3ee","rgba(34,211,238,0.10)"],
+    "Stake":       ["#ef4444","rgba(239,68,68,0.10)"],
+    "Claim Reward":["#a78bfa","rgba(167,139,250,0.10)"],
+  }[k] || ["#a78bfa","rgba(167,139,250,0.10)"]);
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[14px] font-semibold">Recent Activity</h3>
+        <Link to="/profile" className="text-[12px] text-ink-400 hover:text-ink-50">View All</Link>
+      </div>
+      <div className="space-y-1">
+        {items.map((it,i)=>{
+          const [c, bg] = tint(it.kind);
+          return (
+            <div key={i} className="flex items-center gap-3 px-1 py-2 rounded-lg row-hover">
+              <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:bg, color:c }}>
+                <Icon name={it.icon} size={16}/>
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium">{it.kind}</div>
+                <div className="text-[11px] text-ink-500 truncate">{it.desc}</div>
+              </div>
+              <div className="text-right">
+                <div className={"text-[12.5px] font-mono "+(it.up?"text-pos":"text-neg")}>{it.amt}</div>
+                <div className="text-[11px] text-ink-500">{it.ago} ago</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SwapWidget(){
+  const { wallet, setShowWallet, pushToast } = useApp();
+  const [tab, setTab] = useState("swap");
+  const [from, setFrom] = useState("USDC");
+  const [to, setTo] = useState(PROJECT_CONFIG.ticker);
+  const [amount, setAmount] = useState(1000);
+  const fromTok = TOKENS.find(t=>t.symbol===from) || TOKENS[1];
+  const toTok = TOKENS.find(t=>t.symbol===to) || TOKENS[0];
+  const fromUsd = amount * fromTok.price;
+  const rate = fromTok.price / toTok.price;
+  const youGet = amount * rate * 0.997;
+  const toUsd = youGet * toTok.price;
+  const flip = ()=>{ const a=from; setFrom(to); setTo(a); };
+  const handle = ()=>{
+    if(!wallet){ setShowWallet(true); return; }
+    pushToast({ kind:'success', title:'Swap submitted', body:`${fmt.num(amount,2)} ${from} → ${fmt.num(youGet,2)} ${to}` });
+  };
+  const TokenSelect = ({value, onChange, side}) => (
+    <button onClick={()=>{ /* simple cycle for demo */
+      const i = TOKENS.findIndex(t=>t.symbol===value);
+      let next = TOKENS[(i+1) % TOKENS.length].symbol;
+      if(next === (side==='from'?to:from)) next = TOKENS[(i+2) % TOKENS.length].symbol;
+      onChange(next);
+    }} className="flex items-center gap-2 pl-1 pr-2.5 h-9 rounded-full border border-line-2 bg-bg hover:bg-hover transition-colors">
+      <TokenMark symbol={value} size={22}/>
+      <span className="text-[13px] font-medium">{value}</span>
+      <Icon name="chevron-down" size={13} className="text-ink-400"/>
+    </button>
+  );
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center bg-bg rounded-lg p-1 border border-line">
+          {[["swap","Swap"],["limit","Limit"],["bridge","Bridge"]].map(([k,label]) => (
+            <button key={k} onClick={()=>setTab(k)}
+              className={"px-3 py-1.5 text-[12.5px] rounded-md transition-colors "+(tab===k?"bg-hover text-ink-50":"text-ink-400")}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <button className="btn btn-ghost btn-icon w-8 h-8" aria-label="Settings"><Icon name="settings-2" size={14}/></button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-stretch gap-3">
+        {/* From */}
+        <div className="rounded-xl2 border border-line bg-bg px-3.5 py-3 min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] uppercase tracking-wider text-ink-500">You pay</span>
+            <span className="text-[11px] text-ink-500 truncate ml-2">Bal <span className="text-ink-200 font-mono">12,400.00</span></span>
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <TokenSelect value={from} onChange={setFrom} side="from"/>
+            <input type="number" value={amount} onChange={e=>setAmount(Math.max(0, parseFloat(e.target.value)||0))}
+              className="flex-1 min-w-0 bg-transparent text-right text-[20px] font-semibold outline-none tnum"/>
+          </div>
+          <div className="text-right text-[11px] text-ink-500 font-mono mt-1">{fmt.usd(fromUsd,2)}</div>
+        </div>
+
+        {/* Flip */}
+        <div className="flex md:items-center justify-center md:justify-center -my-2 md:my-0">
+          <button onClick={flip} className="w-10 h-10 rounded-full bg-surface border border-line-2 flex items-center justify-center hover:bg-hover hover:rotate-180 transition-all duration-300 shadow-[0_0_18px_-6px_rgba(var(--glow),0.4)]" aria-label="Flip">
+            <Icon name="arrow-down-up" size={15}/>
+          </button>
+        </div>
+
+        {/* To */}
+        <div className="rounded-xl2 border border-line bg-bg px-3.5 py-3 min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] uppercase tracking-wider text-ink-500">You receive</span>
+            <span className="text-[11px] text-ink-500 truncate ml-2 font-mono">~ {(rate).toFixed(4)}</span>
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <TokenSelect value={to} onChange={setTo} side="to"/>
+            <div className="flex-1 min-w-0 text-right text-[20px] font-semibold tnum truncate">{fmt.num(youGet,2)}</div>
+          </div>
+          <div className="text-right text-[11px] text-ink-500 font-mono mt-1">{fmt.usd(toUsd,2)} <span className="text-neg">−0.30%</span></div>
+        </div>
+      </div>
+
+      <button onClick={handle} className="btn btn-primary w-full justify-center mt-3 h-11 text-[14px]">
+        <Icon name={wallet?"arrow-down-up":"wallet"} size={15}/>
+        {wallet ? `Swap ${from} for ${to}` : 'Connect Wallet'}
+      </button>
+
+      <div className="mt-3 pt-3 border-t border-line flex items-center justify-between gap-3 text-[11px] text-ink-500 flex-wrap">
+        <span>Rate <span className="font-mono text-ink-300">1 {from} = {rate.toFixed(4)} {to}</span></span>
+        <span>Slippage <span className="font-mono text-ink-300">0.5%</span></span>
+        <span>Network fee <span className="font-mono text-ink-300">~0.00012 SOL</span></span>
+      </div>
+    </div>
+  );
+}
+
+function MarketsPage(){
+  const { setActiveTxModal } = useApp();
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex items-center justify-end gap-2">
+        <button onClick={()=>setActiveTxModal({ type:'Buy', token: TOKENS[0], amount: 1000 })} className="btn btn-primary">
+          <Icon name="arrow-down-up" size={14}/> Trade
+        </button>
+        <button className="btn btn-secondary">
+          <Icon name="arrow-down-to-line" size={14}/> Deposit
+        </button>
+      </div>
+
+      <StatGrid/>
+
+      {/* Chart + Order Book — side-by-side per reference */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="lg:col-span-2"><PriceChartCard/></div>
+        <div><OrderBookCard/></div>
+      </div>
+
+      {/* Portfolio + Recent Transactions + Top Movers — 3-col row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+        <PortfolioCard/>
+        <RecentActivityCard/>
+        <TopMoversCard/>
+      </div>
+
+      {/* Swap + Your Assets */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="lg:col-span-2"><SwapWidget/></div>
+        <div><YourAssets/></div>
+      </div>
+
+      {/* Tx feed full width */}
+      <TxFeedCard rows={9}/>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   MARKETPLACE
+   ───────────────────────────────────────────────────────── */
+function NFTCard({ nft, onClick, density="comfortable" }){
+  const auctionEnd = useMemo(()=> Date.now() + nft.auctionEndsIn*1000, [nft.id]);
+  const [left, setLeft] = useState(auctionEnd - Date.now());
+  useEffect(()=>{
+    if(!nft.auction) return;
+    const t = setInterval(()=> setLeft(Math.max(0, auctionEnd - Date.now())), 1000);
+    return ()=> clearInterval(t);
+  }, [nft.auction, auctionEnd]);
+  const h = Math.floor(left/3600000);
+  const m = Math.floor((left%3600000)/60000);
+  const s = Math.floor((left%60000)/1000);
+  const timer = h>0 ? `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s` :
+                m>0 ? `${m}m ${String(s).padStart(2,'0')}s` : `${s}s`;
+  return (
+    <button onClick={onClick} className="group text-left flex flex-col">
+      <div className="relative overflow-hidden rounded-xl2 bg-hover" style={{ aspectRatio: '4/5' }}>
+        <NFTArt seed={nft.seed} w={640} h={800} className="transition-transform duration-500 group-hover:scale-[1.02]"/>
+      </div>
+
+      <div className="mt-3 px-1">
+        <div className="text-[15px] font-semibold leading-snug truncate">{nft.name}</div>
+
+        <div className="mt-1.5 flex items-center gap-2">
+          <img src={artistAvatar(nft.artist)} alt="" loading="lazy"
+            className="w-5 h-5 rounded-full object-cover flex-shrink-0 bg-hover"/>
+          <span className="text-[13px] text-ink-200 truncate">{nft.artist}</span>
+          {nft.verified && (
+            <span className="text-accent-2 flex-shrink-0" title="Verified artist">
+              <Icon name="badge-check" size={13}/>
+            </span>
+          )}
+        </div>
+
+        <div className="mt-3 rounded-full bg-ink-50 text-bg py-2 px-3 text-[12.5px] font-mono text-center tnum tracking-tight">
+          {nft.auction && left>0 ? timer : `${nft.price} SOL`}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function FilterPanel({ filter, setFilter, sort, setSort, count, total, isInline=false }){
+  return (
+    <div className="space-y-5">
+      <div>
+        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Status</h4>
+        <div className="flex flex-wrap gap-1.5">
+          {["All","Listed","Auction"].map(s => (
+            <button key={s} onClick={()=>setFilter(f=>({...f, status:s}))}
+              className={"chip "+(filter.status===s?"chip-accent":"")}>{s}</button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Rarity</h4>
+        <div className="flex flex-wrap gap-1.5">
+          {["All", ...NFT_TRAITS.Rarity].map(r => (
+            <button key={r} onClick={()=>setFilter(f=>({...f, rarity:r}))}
+              className={"chip "+(filter.rarity===r?"chip-accent":"")}>{r}</button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Price (SOL): up to {filter.price[1].toFixed(1)}</h4>
+        <input type="range" min="0" max="12" step="0.1" value={filter.price[1]} onChange={e=>setFilter(f=>({...f, price:[0, parseFloat(e.target.value)]}))} className="w-full"/>
+      </div>
+      <div>
+        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Trait</h4>
+        <select value={filter.trait} onChange={e=>setFilter(f=>({...f, trait:e.target.value}))} className="input text-[13px]">
+          <option>All</option>
+          {Object.values(NFT_TRAITS).flat().map((t,i)=>(<option key={i}>{t}</option>))}
+        </select>
+      </div>
+      <div>
+        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Sort</h4>
+        <select value={sort} onChange={e=>setSort(e.target.value)} className="input text-[13px]">
+          <option value="price-low">Price: Low to High</option>
+          <option value="price-high">Price: High to Low</option>
+          <option value="rarity">Rarity</option>
+        </select>
+      </div>
+      <div className="text-[12px] text-ink-400 pt-3 border-t border-line">
+        Showing <span className="text-ink-100 font-mono">{count}</span> of {total}
+      </div>
+    </div>
+  );
+}
+
+const MKT_TABS = [
+  { id:"curated",  label:"Curated"  },
+  { id:"all",      label:"All"      },
+  { id:"trending", label:"Trending" },
+  { id:"editions", label:"Liquid Editions" },
+];
+const MKT_VIEWS = [
+  { id:"grid",    icon:"layout-grid", cols:"grid-cols-2 sm:grid-cols-3 xl:grid-cols-4" },
+  { id:"dense",   icon:"grid-3x3",    cols:"grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" },
+  { id:"list",    icon:"list",        cols:"grid-cols-1" },
+  { id:"image",   icon:"image",       cols:"grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" },
+];
+const SORT_OPTIONS = [
+  { id:"recent",     label:"Recent activity" },
+  { id:"ending",     label:"Ending soon" },
+  { id:"price-low",  label:"Price: low to high" },
+  { id:"price-high", label:"Price: high to low" },
+  { id:"sales",      label:"Most collected" },
+];
+
+function MarketplacePage(){
+  const { setActiveNFT, showFilters, setShowFilters } = useApp();
+  const [tab, setTab] = useState("curated");
+  const [view, setView] = useState("grid");
+  const [filter, setFilter] = useState({ rarity:"All", price:[0,12], status:"All", trait:"All", market:"all" });
+  const [sort, setSort] = useState("recent");
+  const [search, setSearch] = useState("");
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef(null);
+
+  useEffect(()=>{
+    const onClick = (e)=>{ if(sortRef.current && !sortRef.current.contains(e.target)) setSortOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    return ()=> document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  const filtered = useMemo(()=>{
+    let arr = NFT_GRID.filter(n => {
+      if(filter.rarity!=="All" && n.rarity!==filter.rarity) return false;
+      if(n.price < filter.price[0] || n.price > filter.price[1]) return false;
+      if(filter.status==="Auction" && !n.auction) return false;
+      if(filter.status==="Listed" && n.auction) return false;
+      if(filter.trait!=="All" && Object.values(n.traits).indexOf(filter.trait)<0) return false;
+      if(filter.market==="primary" && n.sales > 1) return false;
+      if(filter.market==="secondary" && n.sales <= 1) return false;
+      if(search && !(n.name.toLowerCase().includes(search.toLowerCase()) || n.artist.toLowerCase().includes(search.toLowerCase()))) return false;
+      if(tab==="trending" && n.likes < 300) return false;
+      if(tab==="editions" && !n.traits.Edition.includes("of")) return false;
+      return true;
+    });
+    if(sort==='price-low')  arr = arr.slice().sort((a,b)=>a.price-b.price);
+    if(sort==='price-high') arr = arr.slice().sort((a,b)=>b.price-a.price);
+    if(sort==='ending')     arr = arr.slice().sort((a,b)=>a.auctionEndsIn-b.auctionEndsIn);
+    if(sort==='sales')      arr = arr.slice().sort((a,b)=>b.sales-a.sales);
+    return arr;
+  }, [filter, sort, search, tab]);
+
+  const viewDef = MKT_VIEWS.find(v=>v.id===view) || MKT_VIEWS[0];
+
+  const [activity, setActivity] = useState(()=> Array.from({length:8}, (_,i)=>({
+    id:i, type:["Mint","Sale","Bid","List","Transfer"][i%5], nft: NFT_GRID[i%NFT_GRID.length],
+    price: parseFloat((Math.random()*4+0.2).toFixed(2)), addr: networkAddr(i*9+1), time: Date.now()-i*30000,
+  })));
+  useEffect(()=>{
+    const t = setInterval(()=>{
+      setActivity(prev => {
+        const next = { id: Date.now(), type: ["Mint","Sale","Bid","List","Transfer"][Math.floor(Math.random()*5)], nft: NFT_GRID[Math.floor(Math.random()*NFT_GRID.length)], price: parseFloat((Math.random()*4+0.2).toFixed(2)), addr: networkAddr(Date.now() & 0xffff), time: Date.now() };
+        return [next, ...prev.slice(0,11)];
+      });
+    }, 3200);
+    return ()=> clearInterval(t);
+  }, []);
+
+  return (
+    <div className="space-y-5 sm:space-y-6">
+      {/* Curated / All / Trending / Liquid Editions */}
+      <div className="-mx-3 sm:-mx-6 px-3 sm:px-6 overflow-x-auto no-scrollbar border-b border-line">
+        <div className="flex items-center gap-5 sm:gap-7 min-w-max">
+          {MKT_TABS.map(t => (
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              className={"relative py-3 text-[12.5px] uppercase tracking-[0.14em] font-semibold transition-colors "+
+                (tab===t.id ? "text-ink-50" : "text-ink-500 hover:text-ink-200")}>
+              {t.label}
+              {tab===t.id && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-ink-50 rounded-full"/>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filter / search / view / sort row */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <button onClick={()=>setShowFilters(true)} className="w-10 h-10 rounded-full border border-line bg-surface hover:bg-hover flex items-center justify-center" aria-label="Filters">
+          <Icon name="sliders-horizontal" size={15}/>
+        </button>
+
+        <div className="flex items-center gap-1.5">
+          {[
+            ["primary","Primary Sales"],
+            ["secondary","Secondary Sales"],
+          ].map(([k,l]) => (
+            <button key={k} onClick={()=>setFilter(f=>({...f, market: f.market===k?"all":k}))}
+              className={"h-10 px-4 rounded-full text-[12.5px] font-medium border transition-colors "+
+                (filter.market===k ? "bg-ink-50 text-bg border-ink-50" : "bg-surface border-line text-ink-200 hover:bg-hover")}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 min-w-[180px] flex justify-center order-last md:order-none w-full md:w-auto">
+          <div className="relative w-full md:w-[360px] lg:w-[440px]">
+            <Icon name="search" size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500"/>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Search artworks"
+              className="w-full h-10 rounded-full bg-surface border border-line pl-9 pr-3 text-[13px] text-ink-50 placeholder:text-ink-500 focus:outline-none focus:border-line-2"/>
+          </div>
+        </div>
+
+        <div className="hidden sm:flex items-center border border-line rounded-full overflow-hidden bg-surface">
+          {MKT_VIEWS.map(v => (
+            <button key={v.id} onClick={()=>setView(v.id)} title={v.id}
+              className={"w-10 h-10 flex items-center justify-center transition-colors "+
+                (view===v.id ? "text-ink-50 bg-hover" : "text-ink-500 hover:text-ink-200")}>
+              <Icon name={v.icon} size={14}/>
+            </button>
+          ))}
+        </div>
+
+        <div className="relative" ref={sortRef}>
+          <button onClick={()=>setSortOpen(o=>!o)} className="h-10 px-4 rounded-full border border-line bg-surface hover:bg-hover flex items-center gap-2 text-[12.5px]">
+            <span>{SORT_OPTIONS.find(s=>s.id===sort)?.label}</span>
+            <Icon name="arrow-down-up" size={13} className="text-ink-400"/>
+          </button>
+          {sortOpen && (
+            <div className="absolute right-0 mt-1.5 w-56 surface p-1 shadow-2xl z-30">
+              {SORT_OPTIONS.map(s => (
+                <button key={s.id} onClick={()=>{ setSort(s.id); setSortOpen(false); }}
+                  className={"w-full text-left px-3 py-2 rounded-md text-[12.5px] transition-colors "+
+                    (sort===s.id ? "bg-hover text-ink-50" : "text-ink-200 hover:bg-hover")}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div className={"grid gap-x-5 gap-y-8 "+viewDef.cols}>
+        {filtered.map(nft => (
+          <NFTCard key={nft.id} nft={nft} onClick={()=>setActiveNFT(nft)} density={view}/>
+        ))}
+        {filtered.length === 0 && (
+          <div className="col-span-full surface p-10 text-center text-ink-400 text-[13px]">No artworks match these filters.</div>
+        )}
+      </div>
+
+      {/* Activity */}
+      <div className="surface">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-line">
+          <h3 className="text-[14px] font-semibold">Activity</h3>
+          <span className="chip"><span className="dot"/> Live</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-ink-500">
+                <th className="text-left font-normal py-2 pl-4 sm:pl-5">Event</th>
+                <th className="text-left font-normal py-2">Item</th>
+                <th className="text-right font-normal py-2">Price</th>
+                <th className="text-right font-normal py-2 hidden sm:table-cell">By</th>
+                <th className="text-right font-normal py-2 pr-4 sm:pr-5">When</th>
+              </tr>
+            </thead>
+            <tbody>
+            {activity.map(a => (
+              <tr key={a.id} className="row-hover border-t border-line">
+                <td className="py-2.5 pl-4 sm:pl-5">{a.type}</td>
+                <td className="py-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-md overflow-hidden bg-hover flex-shrink-0"><NFTArt seed={a.nft.seed} w={64} h={64}/></div>
+                    <div className="min-w-0">
+                      <div className="truncate">{a.nft.name}</div>
+                      <div className="text-[11px] text-ink-500 truncate">{a.nft.artist}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="py-2.5 text-right font-mono">{a.price} SOL</td>
+                <td className="py-2.5 text-right font-mono text-ink-300 hidden sm:table-cell">{fmt.short(a.addr,4,4)}</td>
+                <td className="py-2.5 pr-4 sm:pr-5 text-right text-ink-500 tnum">{fmt.ago(a.time)}</td>
+              </tr>
+            ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile / desktop filter sheet */}
+      {showFilters && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4" onClick={()=>setShowFilters(false)}>
+          <div className="backdrop"/>
+          <div onClick={e=>e.stopPropagation()} className="relative w-full sm:max-w-md bg-surface border border-line rounded-t-xl sm:rounded-xl max-h-[80vh] overflow-y-auto fade-in">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-line sticky top-0 bg-surface">
+              <h3 className="font-semibold text-[15px]">Filters & sort</h3>
+              <button className="btn btn-ghost btn-icon" onClick={()=>setShowFilters(false)}><Icon name="x" size={16}/></button>
+            </div>
+            <div className="p-4">
+              <FilterPanel filter={filter} setFilter={setFilter} sort={sort} setSort={setSort} count={filtered.length} total={NFT_GRID.length}/>
+              <button className="w-full btn btn-primary mt-4" onClick={()=>setShowFilters(false)}>Show {filtered.length} results</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NFTDetailModal(){
+  const { activeNFT, setActiveNFT, setActiveTxModal } = useApp();
+  const seed = activeNFT?.seed || 1;
+  const priceBase = activeNFT?.price || 1;
+  const priceHistory = useMemo(()=>{
+    const r = rng(seed*5+1);
+    return Array.from({length: 30}, (_,i)=>({ d: i, price: parseFloat((priceBase * (0.6 + r()*0.7 + (i/30)*0.4)).toFixed(2)) }));
+  }, [seed, priceBase]);
+  const bids = useMemo(()=> Array.from({length:5}, (_,i)=> ({
+    bidder: networkAddr(seed*7+i+1),
+    amount: parseFloat((priceBase - i*0.05).toFixed(2)),
+    time: Date.now() - i*1000*60*30,
+  })), [seed, priceBase]);
+  if(!activeNFT) return null;
+  return (
+    <Modal open onClose={()=>setActiveNFT(null)} title={activeNFT.name} size="xl">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="space-y-3">
+          <div className="rounded-xl2 overflow-hidden border border-line bg-hover" style={{aspectRatio:'4/5'}}>
+            <NFTArt seed={seed} w={960} h={1200}/>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[12px]">
+            <div className="surface px-3 py-2.5"><div className="text-ink-500 text-[11px]">Owner</div><div className="font-mono mt-0.5 truncate">{fmt.short(activeNFT.owner,5,4)}</div></div>
+            <div className="surface px-3 py-2.5"><div className="text-ink-500 text-[11px]">Token ID</div><div className="font-mono mt-0.5">#{activeNFT.id}</div></div>
+            <div className="surface px-3 py-2.5"><div className="text-ink-500 text-[11px]">Mint</div><div className="font-mono mt-0.5">2025-12-04</div></div>
+            <div className="surface px-3 py-2.5"><div className="text-ink-500 text-[11px]">Standard</div><div className="font-mono mt-0.5">SPL-NFT v2</div></div>
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2.5">
+            <img src={artistAvatar(activeNFT.artist)} alt="" className="w-8 h-8 rounded-full object-cover bg-hover"/>
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-wider text-ink-500">Artist</div>
+              <div className="text-[14px] font-medium flex items-center gap-1.5">
+                {activeNFT.artist}
+                {activeNFT.verified && <span className="text-accent-2"><Icon name="badge-check" size={13}/></span>}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="chip" style={{ background: RARITY_COLORS[activeNFT.rarity]+'24', borderColor: RARITY_COLORS[activeNFT.rarity]+'55', color: RARITY_COLORS[activeNFT.rarity] }}>{activeNFT.rarity}</span>
+            <span className="chip">{activeNFT.traits.Edition}</span>
+            <span className="chip"><Icon name="heart" size={11}/> {activeNFT.likes}</span>
+          </div>
+          <div className="surface p-4">
+            <div className="text-[11px] text-ink-500 uppercase tracking-wider">{activeNFT.auction?'Top bid':'Listed price'}</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-[26px] font-semibold tnum">{activeNFT.price}</span>
+              <span className="text-ink-400">SOL</span>
+              <span className="ml-auto text-[11px] text-ink-500 font-mono">≈ {fmt.usd(activeNFT.price * 184.21, 0)}</span>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button onClick={()=>setActiveTxModal({ type: activeNFT.auction?'Bid':'Buy', token: { symbol: 'SOL' }, amount: activeNFT.price, nft: activeNFT })}
+                className="flex-1 btn btn-primary justify-center">
+                <Icon name={activeNFT.auction?'gavel':'shopping-cart'} size={14}/>
+                {activeNFT.auction ? 'Place bid' : 'Buy now'}
+              </button>
+              <button className="btn btn-secondary btn-icon" aria-label="Share"><Icon name="share-2" size={14}/></button>
+            </div>
+          </div>
+          <div>
+            <h4 className="text-[12px] font-medium mb-2">Attributes</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(activeNFT.traits).map(([k,v])=>(
+                <div key={k} className="surface px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-wider text-ink-500">{k}</div>
+                  <div className="text-[13px] font-medium mt-0.5">{v}</div>
+                  <div className="text-[10px] text-ink-500 mt-0.5">{(Math.abs((seed+k.length)*7 % 30)+1).toFixed(1)}% have this</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h4 className="text-[12px] font-medium mb-2">Price history</h4>
+            <div className="h-24 surface p-2">
+              <ResponsiveContainer>
+                <AreaChart data={priceHistory}>
+                  <defs>
+                    <linearGradient id="phg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.45"/>
+                      <stop offset="100%" stopColor="#a78bfa" stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <Tooltip formatter={v=>v+' SOL'}/>
+                  <Area type="monotone" dataKey="price" stroke="#a78bfa" fill="url(#phg)" strokeWidth={1.5} isAnimationActive={false}/>
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div>
+            <h4 className="text-[12px] font-medium mb-2">Bid history</h4>
+            <div className="space-y-px">
+              {bids.map((b,i)=>(
+                <div key={i} className="flex items-center justify-between text-[12px] py-1.5 px-2 row-hover rounded">
+                  <span className="font-mono">{fmt.short(b.bidder,5,4)}</span>
+                  <span className="font-mono">{b.amount.toFixed(2)} SOL</span>
+                  <span className="text-ink-500">{fmt.ago(b.time)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   STAKING
+   ───────────────────────────────────────────────────────── */
+function StakingCalculator(){
+  const [amount, setAmount] = useState(1000);
+  const [days, setDays] = useState(90);
+  const baseApr = 12.4;
+  const mul = 1 + Math.min(days/365, 1) * 1.4;
+  const apr = baseApr * mul;
+  const yearly = amount * (apr/100);
+  const projected = amount * (apr/100) * (days/365);
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[14px] font-semibold">Staking calculator</h3>
+        <span className="chip">Estimate</span>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] uppercase tracking-wider text-ink-500">Amount ({PROJECT_CONFIG.ticker})</label>
+            <div className="flex gap-2 mt-1.5">
+              <input type="number" value={amount} onChange={e=>setAmount(Math.max(0, parseFloat(e.target.value)||0))} className="input font-mono"/>
+              <button onClick={()=>setAmount(10000)} className="btn btn-secondary text-[11px]">MAX</button>
+            </div>
+            <input type="range" min="0" max="50000" step="100" value={amount} onChange={e=>setAmount(parseFloat(e.target.value))} className="w-full mt-3"/>
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-wider text-ink-500">Lock: <span className="text-ink-50">{days} days</span></label>
+            <input type="range" min="0" max="365" step="1" value={days} onChange={e=>setDays(parseInt(e.target.value))} className="w-full mt-2"/>
+            <div className="flex justify-between text-[10px] text-ink-500 mt-1"><span>Flex</span><span>30d</span><span>90d</span><span>180d</span><span>365d</span></div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:col-span-2">
+          <div className="surface p-3">
+            <div className="text-[11px] uppercase text-ink-500">Effective APR</div>
+            <div className="text-[24px] font-semibold text-pos mt-1 tnum"><CountUp value={apr} decimals={1} suffix="%"/></div>
+            <div className="text-[10px] text-ink-500 mt-0.5">Base {baseApr}% × {mul.toFixed(2)}x</div>
+          </div>
+          <div className="surface p-3">
+            <div className="text-[11px] uppercase text-ink-500">Yearly est.</div>
+            <div className="text-[24px] font-semibold mt-1 tnum"><CountUp value={yearly} decimals={2}/></div>
+            <div className="text-[10px] text-ink-500 mt-0.5">≈ {fmt.usd(yearly * 2.34, 0)}</div>
+          </div>
+          <div className="surface p-3 col-span-2">
+            <div className="text-[11px] uppercase text-ink-500">Projected at unlock ({days}d)</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-[26px] font-semibold tnum text-accent">+<CountUp value={projected} decimals={2}/></span>
+              <span className="text-ink-400">{PROJECT_CONFIG.ticker}</span>
+              <span className="ml-auto text-[12px] text-ink-500 font-mono">{fmt.usd(projected * 2.34, 2)}</span>
+            </div>
+            <button className="btn btn-primary mt-3 w-full justify-center">Lock {fmt.num(amount,0)} {PROJECT_CONFIG.ticker} for {days}d</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StakingPage(){
+  const { setActiveStakeModal, wallet, pushToast, setShowWallet } = useApp();
+  const earnings = Array.from({length: 30}, (_, i) => ({ d: 'D'+(i+1), daily: parseFloat((10 + Math.sin(i/3)*4 + Math.random()*4).toFixed(2)) }));
+  const myPositions = wallet ? [
+    { pool: PROJECT_CONFIG.ticker+" Single", amount: 5400, lockedFor: "90d", endsIn: 32, pending: 184.5, apr: 22.3 },
+    { pool: "Genesis Pool", amount: 1200, lockedFor: "180d", endsIn: 121, pending: 88.2, apr: 64.2 },
+  ] : [];
+  const totalStaked = myPositions.reduce((s,p)=>s+p.amount, 0);
+  const totalPending = myPositions.reduce((s,p)=>s+p.pending, 0);
+  const totalValue = (totalStaked + totalPending) * 2.34;
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      {/* Hero: Your Staked Positions */}
+      <div className="surface p-4 sm:p-6 relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: 'radial-gradient(800px 200px at 100% 0%, rgba(var(--glow),0.10), transparent 60%), radial-gradient(600px 180px at 0% 100%, rgba(var(--glow-2),0.06), transparent 60%)'
+        }}/>
+        <div className="relative flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[16px] font-semibold tracking-tight">Your Staked Positions</h2>
+              {wallet && <span className="chip chip-pos text-[10px]"><span className="dot"/> Earning</span>}
+            </div>
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-8">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-ink-500">Total Staked</div>
+                <div className="text-[22px] sm:text-[24px] font-semibold tracking-tight num mt-1">
+                  <CountUp value={totalStaked} decimals={0}/> <span className="text-ink-400 text-[14px] font-normal">{PROJECT_CONFIG.ticker}</span>
+                </div>
+                <div className="text-[11px] text-ink-500 mt-0.5 font-mono">{fmt.usd(totalStaked * 2.34, 2)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-ink-500">Rewards Earned</div>
+                <div className="text-[22px] sm:text-[24px] font-semibold tracking-tight num text-pos mt-1">
+                  +<CountUp value={totalPending} decimals={2}/> <span className="text-ink-400 text-[14px] font-normal">{PROJECT_CONFIG.ticker}</span>
+                </div>
+                <div className="text-[11px] text-ink-500 mt-0.5 font-mono">{fmt.usd(totalPending * 2.34, 2)}</div>
+              </div>
+              <div className="col-span-2 md:col-span-1">
+                <div className="text-[10px] uppercase tracking-wider text-ink-500">Total Value</div>
+                <div className="text-[22px] sm:text-[24px] font-semibold tracking-tight num mt-1 text-glow">
+                  <CountUp value={totalValue} prefix="$" decimals={2}/>
+                </div>
+                <div className="text-[11px] text-pos mt-0.5">+8.24% all-time</div>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={()=>{
+              if(!wallet){ setShowWallet(true); return; }
+              if(totalPending<=0) return;
+              pushToast({kind:'success', title:'Rewards claimed', body: `+${fmt.num(totalPending,2)} ${PROJECT_CONFIG.ticker} added to wallet`});
+            }}
+            className="btn btn-primary h-11 px-5 self-start md:self-auto">
+            <Icon name="gift" size={15}/> Claim Rewards
+          </button>
+        </div>
+      </div>
+
+      <StakingCalculator/>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+        {STAKING_POOLS.map((p, i) => {
+          const hot = p.apr > 50;
+          return (
+            <div key={p.name} className="surface surface-hover p-4 sm:p-5 relative overflow-hidden">
+              <div className="absolute inset-0 pointer-events-none rounded-[14px]" style={{
+                background: hot
+                  ? 'linear-gradient(160deg, rgba(var(--glow),0.14) 0%, transparent 55%), radial-gradient(120% 100% at 100% 0%, rgba(236,72,153,0.10), transparent 60%)'
+                  : 'linear-gradient(160deg, rgba(var(--glow),0.08) 0%, transparent 55%)'
+              }}/>
+              {hot && <span className="absolute top-3 right-3 chip chip-accent text-[10px]">High APR</span>}
+              <div className="relative">
+                <div className="flex items-center gap-3">
+                  <span className={hot ? "halo rounded-full" : ""}><TokenMark symbol={p.symbol} size={36}/></span>
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-semibold truncate">{p.name}</div>
+                    <div className="text-[11px] text-ink-500">{p.symbol}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-line">
+                  <div>
+                    <div className="text-[10px] uppercase text-ink-500">APR</div>
+                    <div className={"text-[20px] font-semibold text-pos tnum num "+(hot?"text-glow":"")}>
+                      <CountUp value={p.apr} decimals={1} suffix="%"/>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase text-ink-500">TVL</div>
+                    <div className="text-[20px] font-semibold tnum num">{fmt.compact(p.tvl)}</div>
+                  </div>
+                </div>
+                <div className="mt-2 text-[10px] text-ink-500">Lock: {p.lockOptions.map(d => d===0?'Flex':d+'d').join(' · ')}</div>
+                <button onClick={()=>{ if(!wallet){ setShowWallet(true); return; } setActiveStakeModal(p); }} className={"w-full btn mt-3 justify-center "+(hot?'btn-primary':'btn-secondary')}>
+                  Stake
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="surface">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-line">
+          <h3 className="text-[14px] font-semibold">Your positions</h3>
+          {wallet && <span className="chip">Pending <span className="text-pos font-mono ml-1">+{fmt.num(myPositions.reduce((s,p)=>s+p.pending,0),2)} {PROJECT_CONFIG.ticker}</span></span>}
+        </div>
+        {!wallet ? (
+          <div className="py-12 px-4 text-center">
+            <Icon name="lock" size={22} className="text-ink-400 inline-flex mb-2"/>
+            <p className="text-[13px] text-ink-400">Connect your wallet to view positions.</p>
+            <button onClick={()=>setShowWallet(true)} className="btn btn-primary mt-3">Connect wallet</button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wider text-ink-500">
+                  <th className="text-left font-normal py-2 pl-4 sm:pl-5">Pool</th>
+                  <th className="text-right font-normal py-2">Staked</th>
+                  <th className="text-center font-normal py-2 hidden sm:table-cell">Lock</th>
+                  <th className="text-right font-normal py-2 hidden sm:table-cell">APR</th>
+                  <th className="text-right font-normal py-2">Pending</th>
+                  <th className="text-right font-normal py-2 pr-4 sm:pr-5"></th>
+                </tr>
+              </thead>
+              <tbody>
+              {myPositions.map((p,i)=>(
+                <tr key={i} className="row-hover border-t border-line">
+                  <td className="py-3 pl-4 sm:pl-5 font-medium">{p.pool}</td>
+                  <td className="py-3 text-right font-mono">{fmt.num(p.amount,0)}</td>
+                  <td className="py-3 text-center text-ink-400 text-[12px] hidden sm:table-cell">{p.lockedFor} · {p.endsIn}d</td>
+                  <td className="py-3 text-right text-pos hidden sm:table-cell">{p.apr.toFixed(1)}%</td>
+                  <td className="py-3 text-right font-mono text-pos">+{p.pending.toFixed(2)}</td>
+                  <td className="py-3 pr-4 sm:pr-5 text-right">
+                    <button onClick={()=>pushToast({kind:'success', title:'Rewards claimed', body:`+${p.pending.toFixed(2)} ${PROJECT_CONFIG.ticker}`})}
+                      className="btn btn-primary text-[11px] px-2.5 py-1">Claim</button>
+                  </td>
+                </tr>
+              ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="surface p-4 sm:p-5 lg:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[14px] font-semibold">Pool earnings — last 30 days</h3>
+            <span className="chip">Daily</span>
+          </div>
+          <div className="h-52 sm:h-64">
+            <ResponsiveContainer>
+              <BarChart data={earnings} margin={{top:8,right:8,left:0,bottom:0}}>
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
+                <XAxis dataKey="d" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
+                <YAxis stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
+                <Tooltip formatter={v=>v+' '+PROJECT_CONFIG.ticker}/>
+                <Bar dataKey="daily" fill="#8b5cf6" radius={[3,3,0,0]} maxBarSize={20}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="surface p-4 sm:p-5">
+          <h3 className="text-[14px] font-semibold mb-3">Reward distribution</h3>
+          <div className="h-44">
+            <ResponsiveContainer>
+              <RadialBarChart data={[
+                { name:"Single", val:62, fill:'#8b5cf6' },
+                { name:"LP", val:48, fill:'#22d3ee' },
+                { name:"Genesis", val:34, fill:'#a78bfa' },
+              ]} innerRadius="35%" outerRadius="100%" startAngle={90} endAngle={-270}>
+                <RadialBar dataKey="val" cornerRadius={4} background={{ fill: 'rgba(255,255,255,0.04)' }}/>
+                <Tooltip/>
+              </RadialBarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="space-y-1.5 mt-2 text-[12px]">
+            <div className="flex justify-between"><span className="text-ink-500">Emitted (24h)</span><span className="font-mono">12,400</span></div>
+            <div className="flex justify-between"><span className="text-ink-500">Avg APR</span><span className="font-mono text-pos">28.4%</span></div>
+            <div className="flex justify-between"><span className="text-ink-500">Next emission</span><span className="font-mono">02:14:33</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StakeModal(){
+  const { activeStakeModal, setActiveStakeModal, pushToast } = useApp();
+  const [amount, setAmount] = useState(500);
+  const [lock, setLock] = useState(0);
+  if(!activeStakeModal) return null;
+  const pool = activeStakeModal;
+  const mul = 1 + Math.min(lock/365, 1) * (pool.maxMul - pool.minMul);
+  const apr = pool.apr * mul / pool.minMul;
+  const projected = amount * (apr/100) * Math.max(lock,1)/365;
+  return (
+    <Modal open onClose={()=>setActiveStakeModal(null)} title={"Stake — "+pool.name}>
+      <div className="space-y-3">
+        <div className="surface p-3">
+          <div className="text-[11px] text-ink-500 uppercase tracking-wider">Amount ({pool.symbol})</div>
+          <input type="number" value={amount} onChange={e=>setAmount(parseFloat(e.target.value)||0)}
+            className="w-full bg-transparent text-[22px] font-semibold tnum mt-1 outline-none"/>
+          <div className="text-[11px] text-ink-500 mt-0.5">Available: 12,401.50 {pool.symbol}</div>
+        </div>
+        <div>
+          <div className="text-[11px] text-ink-500 uppercase tracking-wider mb-2">Lock period: <span className="text-ink-50 normal-case">{lock===0?'Flexible':lock+' days'}</span></div>
+          <div className="flex flex-wrap gap-1.5">
+            {pool.lockOptions.map(d => (
+              <button key={d} onClick={()=>setLock(d)} className={"chip "+(lock===d?"chip-accent":"")}>{d===0?'Flex':d+'d'}</button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="surface p-3"><div className="text-[11px] text-ink-500">APR</div><div className="text-[18px] font-semibold text-pos tnum">{apr.toFixed(1)}%</div></div>
+          <div className="surface p-3"><div className="text-[11px] text-ink-500">Reward</div><div className="text-[18px] font-semibold tnum">+{projected.toFixed(2)}</div></div>
+        </div>
+        <button onClick={()=>{
+          pushToast({ kind:'success', title:'Stake submitted', body: `${fmt.num(amount,0)} ${pool.symbol} · ${lock===0?'flex':lock+'d'} · ${apr.toFixed(1)}% APR` });
+          setActiveStakeModal(null);
+        }} className="w-full btn btn-primary justify-center">Confirm stake</button>
+        <p className="text-[10px] text-ink-500 text-center">Locked tokens cannot be withdrawn until expiration. Early unlock fees may apply.</p>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   GOVERNANCE
+   ───────────────────────────────────────────────────────── */
+function GovernancePage(){
+  const [active, setActive] = useState(PROPOSALS[0]);
+  const [tab, setTab] = useState("active");
+  const filtered = PROPOSALS.filter(p => tab==='all' ? true : p.status===tab);
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-[20px] sm:text-[22px] font-semibold tracking-tight">Governance</h1>
+          <p className="text-[13px] text-ink-400">{PROJECT_CONFIG.name} is community-governed. Vote with your staked tokens.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <div className="surface px-3 py-2 text-[12px] flex items-center gap-2"><Icon name="zap" size={13} className="text-ink-400"/><span className="text-ink-400">Voting power</span> <span className="font-mono">12,401</span></div>
+          <button className="btn btn-primary"><Icon name="plus" size={14}/> New proposal</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Your Voting Power" value={12401} suffix={" "+PROJECT_CONFIG.ticker} change={4.5} hot/>
+        <StatCard label="Active Proposals" value={3} change={9.1}/>
+        <StatCard label="Treasury" value={4_241_812} prefix="$" change={2.1}/>
+        <StatCard label="Quorum" value={18.45} suffix="%" decimals={2} change={-1.2}/>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-3 sm:gap-4">
+        <div className="surface p-3 h-fit xl:sticky xl:top-[72px]">
+          <div className="flex items-center gap-1 mb-3 bg-bg rounded-lg p-1 border border-line">
+            {["active","passed","failed","all"].map(t => (
+              <button key={t} onClick={()=>setTab(t)}
+                className={"flex-1 text-[12px] py-1.5 rounded-md capitalize transition-colors "+(tab===t?"bg-hover text-ink-50":"text-ink-400")}>{t}</button>
+            ))}
+          </div>
+          <div className="space-y-2 max-h-[60vh] xl:max-h-[calc(100vh-220px)] overflow-y-auto">
+            {filtered.map(p => {
+              const total = p.for + p.against + p.abstain;
+              const pctFor = (p.for/total)*100;
+              const isActive = active.id === p.id;
+              return (
+                <button key={p.id} onClick={()=>setActive(p)}
+                  style={isActive?{ background:'linear-gradient(160deg, var(--primary-soft), transparent 60%), var(--surface)', boxShadow:'inset 0 1px 0 var(--inset-hi-2), 0 0 0 1px rgba(var(--glow),0.30)' }:undefined}
+                  className={"w-full text-left surface p-3 transition-all duration-200 "+(isActive?"":"surface-hover")}>
+                  <div className="flex items-center justify-between text-[10px] mb-1">
+                    <span className="font-mono text-ink-500">{p.id}</span>
+                    <span className={"chip "+(p.status==='active'?'chip-pos':p.status==='passed'?'chip-accent':'chip-neg')}>{p.status}</span>
+                  </div>
+                  <div className="text-[13px] font-medium leading-snug">{p.title}</div>
+                  <div className="mt-2">
+                    <div className="h-1 rounded-full bg-hover overflow-hidden flex">
+                      <div className="bg-pos" style={{ width: pctFor+'%' }}/>
+                      <div className="bg-neg" style={{ width: (p.against/total)*100+'%' }}/>
+                    </div>
+                    <div className="flex justify-between mt-1 text-[10px] font-mono">
+                      <span className="text-pos">{pctFor.toFixed(0)}% for</span>
+                      <span className="text-neg">{((p.against/total)*100).toFixed(0)}% against</span>
+                    </div>
+                  </div>
+                  {p.status==='active' && (
+                    <div className="text-[10px] text-ink-500 mt-2 flex items-center gap-1">
+                      <Icon name="timer" size={10}/> {Math.floor(p.endsIn/3600)}h {Math.floor((p.endsIn%3600)/60)}m left
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-3 sm:space-y-4 min-w-0">
+          <ProposalDetail proposal={active}/>
+          <Treasury/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProposalDetail({ proposal }){
+  const { pushToast } = useApp();
+  const total = proposal.for + proposal.against + proposal.abstain;
+  const data = [
+    { name:"For",     v: proposal.for,     color: '#34d399' },
+    { name:"Against", v: proposal.against, color: '#f87171' },
+    { name:"Abstain", v: proposal.abstain, color: '#7a8497' },
+  ];
+  const [vote, setVote] = useState(null);
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="chip font-mono">{proposal.id}</span>
+            <span className={"chip "+(proposal.status==='active'?'chip-pos':proposal.status==='passed'?'chip-accent':'chip-neg')}>{proposal.status}</span>
+            <span className="chip">{proposal.category}</span>
+          </div>
+          <h2 className="text-[16px] sm:text-[18px] font-semibold tracking-tight mt-2">{proposal.title}</h2>
+          <div className="text-[11px] text-ink-500 mt-1">By <span className="font-mono">{fmt.short(proposal.author,5,4)}</span> · 4 days ago</div>
+        </div>
+        {proposal.status==='active' && (
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wider text-ink-500">Ends in</div>
+            <div className="font-mono text-[16px] tnum">{Math.floor(proposal.endsIn/3600)}h {Math.floor((proposal.endsIn%3600)/60)}m</div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 text-[13px] text-ink-200 leading-relaxed">
+        <p>This proposal adjusts the parameter referenced in the title. The change has been simulated against treasury runway and historical participation rates; full simulation appendix is linked in the discussion thread.</p>
+        <ul className="list-disc list-inside text-ink-400 text-[12px] space-y-1 mt-2 pl-2">
+          <li>Implementation: 14 days post-passing.</li>
+          <li>Modeled impact: +18–24% staking participation.</li>
+          <li>Reversible via subsequent CIP with 60% supermajority.</li>
+        </ul>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+        <div className="lg:col-span-2 space-y-2">
+          {data.map(d => {
+            const p = (d.v/total)*100;
+            return (
+              <div key={d.name}>
+                <div className="flex justify-between text-[12px] mb-1">
+                  <span className="font-medium" style={{color:d.color}}>{d.name}</span>
+                  <span className="font-mono">{fmt.compact(d.v)} <span className="text-ink-500">({p.toFixed(1)}%)</span></span>
+                </div>
+                <div className="h-1.5 bg-hover rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: p+'%', background: d.color }}/>
+                </div>
+              </div>
+            );
+          })}
+          <div className="pt-3 mt-3 border-t border-line text-[12px] text-ink-400 flex flex-wrap gap-x-4 gap-y-1">
+            <span>Quorum <span className="text-ink-100 font-mono">{(total/8_000_000*100).toFixed(0)}% / 50%</span></span>
+            <span>Total <span className="text-ink-100 font-mono">{fmt.compact(total)}</span></span>
+            <span>Voters <span className="text-ink-100 font-mono">{fmt.compact(total/24)}</span></span>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {proposal.status==='active' ? (
+            <>
+              <button onClick={()=>{ setVote('for'); pushToast({kind:'success', title:'Vote cast', body:'Voted FOR with 12,401'}); }}
+                style={vote==='for'?{ borderColor:'var(--pos)', background:'rgba(16,185,129,0.10)', color:'var(--pos)' }:undefined}
+                className={"w-full p-3 rounded-lg border transition flex items-center justify-between text-[13px] "+(vote==='for'?'':'border-line hover:border-line-2')}>
+                <span className="flex items-center gap-2"><Icon name="thumbs-up" size={14}/>For</span>
+                <span className="font-mono text-[11px]">12,401</span>
+              </button>
+              <button onClick={()=>{ setVote('against'); pushToast({kind:'success', title:'Vote cast', body:'Voted AGAINST with 12,401'}); }}
+                style={vote==='against'?{ borderColor:'var(--neg)', background:'rgba(239,68,68,0.10)', color:'var(--neg)' }:undefined}
+                className={"w-full p-3 rounded-lg border transition flex items-center justify-between text-[13px] "+(vote==='against'?'':'border-line hover:border-line-2')}>
+                <span className="flex items-center gap-2"><Icon name="thumbs-down" size={14}/>Against</span>
+                <span className="font-mono text-[11px]">12,401</span>
+              </button>
+              <button onClick={()=>{ setVote('abstain'); pushToast({kind:'success', title:'Abstained'}); }}
+                className={"w-full p-3 rounded-lg border transition flex items-center gap-2 text-[13px] "+(vote==='abstain'?'border-line-2 bg-hover':'border-line hover:border-line-2')}>
+                <Icon name="minus" size={14}/>Abstain
+              </button>
+            </>
+          ) : (
+            <div className="surface p-4 text-center text-[13px] text-ink-400">Voting closed. Final result: <span className={proposal.status==='passed'?'text-pos':'text-neg'}>{proposal.status.toUpperCase()}</span></div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 border-t border-line pt-4">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-[13px] font-semibold">Discussion <span className="text-ink-500">({Math.floor(total/40000)})</span></h4>
+          <button className="text-[11px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1">Forum <Icon name="external-link" size={11}/></button>
+        </div>
+        <div className="space-y-2">
+          {[
+            { addr: networkAddr(11), msg: "Strong support — current APR isn't competitive vs. peers. Lock multipliers should also bump to 3× for 365d.", mins: 14 },
+            { addr: networkAddr(22), msg: "Concerned about emission rate. Have we modeled treasury impact at +400bps over 12 months?", mins: 41 },
+            { addr: networkAddr(33), msg: "Simulation in the appendix shows treasury healthy at 5y horizon if revenue holds.", mins: 96 },
+          ].map((c,i)=>(
+            <div key={i} className="surface px-3 py-2.5 flex gap-3">
+              <Identicon seed={i*9+1} size={26}/>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] flex justify-between">
+                  <span className="font-mono text-ink-400">{fmt.short(c.addr,5,4)}</span>
+                  <span className="text-ink-500">{c.mins}m ago</span>
+                </div>
+                <div className="text-[13px] mt-1 text-ink-200">{c.msg}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Treasury(){
+  const data = [
+    { name: PROJECT_CONFIG.ticker, value: 1_840_000, color: '#8b5cf6' },
+    { name: "USDC", value: 1_220_000, color: '#34d399' },
+    { name: "SOL",  value:   480_000, color: '#a78bfa' },
+    { name: "JUP",  value:   312_000, color: '#22d3ee' },
+    { name: "Other",value:   390_000, color: '#7a8497' },
+  ];
+  const total = data.reduce((s,d)=>s+d.value,0);
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+      <div className="surface p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-[14px] font-semibold">Treasury</h3>
+          <span className="chip chip-pos">+2.1% 30d</span>
+        </div>
+        <div className="text-[22px] font-semibold tracking-tight">{fmt.usd(total,0)}</div>
+        <div className="h-40 mt-2">
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie data={data} dataKey="value" innerRadius={36} outerRadius={64}>
+                {data.map((d,i)=>(<Cell key={i} fill={d.color}/>))}
+              </Pie>
+              <Tooltip formatter={v=>fmt.usd(v,0)}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="space-y-1 text-[12px]">
+          {data.map(d => (
+            <div key={d.name} className="flex justify-between">
+              <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full" style={{background:d.color}}/>{d.name}</span>
+              <span className="font-mono text-ink-400">{((d.value/total)*100).toFixed(1)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="surface lg:col-span-2">
+        <div className="px-4 sm:px-5 py-3 border-b border-line">
+          <h3 className="text-[14px] font-semibold">Treasury activity</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead><tr className="text-[10px] uppercase tracking-wider text-ink-500">
+              <th className="text-left font-normal py-2 pl-4 sm:pl-5">Direction</th>
+              <th className="text-left font-normal py-2">Description</th>
+              <th className="text-right font-normal py-2">Amount</th>
+              <th className="text-right font-normal py-2 pr-4 sm:pr-5">Date</th>
+            </tr></thead>
+            <tbody>
+            {[
+              { t:"Out",desc:"Grant: Aetheria Labs",      amt:-50_000,  when:"2d ago" },
+              { t:"In", desc:"Protocol fees Q3W5",        amt: 84_120,  when:"3d ago" },
+              { t:"Out",desc:"Audit retainer — Halborn",  amt:-22_000,  when:"5d ago" },
+              { t:"In", desc:"NFT royalties",             amt: 14_220,  when:"6d ago" },
+              { t:"Out",desc:"Liquidity bootstrap",       amt:-180_000, when:"8d ago" },
+            ].map((e,i)=>(
+              <tr key={i} className="row-hover border-t border-line">
+                <td className={"py-2.5 pl-4 sm:pl-5 "+(e.amt>=0?"text-pos":"text-neg")}>{e.t}</td>
+                <td className="py-2.5 text-ink-200">{e.desc}</td>
+                <td className={"py-2.5 text-right font-mono "+(e.amt>=0?"text-pos":"text-neg")}>{e.amt>=0?'+':''}{fmt.usd(e.amt,0)}</td>
+                <td className="py-2.5 pr-4 sm:pr-5 text-right text-ink-500">{e.when}</td>
+              </tr>
+            ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   ANALYTICS
+   ───────────────────────────────────────────────────────── */
+function AnalyticsPage(){
+  const [tf, setTf] = useState("30D");
+  const series = useMemo(()=>{
+    const n = { "1H":60, "24H":48, "7D":56, "30D":30, "ALL":52 }[tf];
+    return Array.from({length:n}, (_,i)=>({
+      label: tf==='1H'?`${i}m`:tf==='24H'?`${i}h`:tf==='7D'?`D${i+1}`:tf==='30D'?`D${i+1}`:`W${i+1}`,
+      price: parseFloat((1.5 + Math.sin(i/4)*0.6 + Math.random()*0.2).toFixed(3)),
+      volume: parseFloat((Math.random()*8 + 2).toFixed(2)),
+    }));
+  }, [tf]);
+
+  const heatmap = useMemo(()=>{
+    const out=[]; for(let r=0;r<7;r++) for(let c=0;c<24;c++) out.push({ r, c, v: Math.random() });
+    return out;
+  }, []);
+
+  const liquidity = Array.from({length: 41}, (_,i) => ({
+    delta: i-20,
+    bid: i<=20 ? 1000 - Math.abs(i-20)*40 - Math.random()*100 : 0,
+    ask: i>=20 ? 1000 - Math.abs(i-20)*40 - Math.random()*100 : 0,
+  }));
+
+  const topHolders = Array.from({length:10}, (_,i) => ({
+    rank: i+1, addr: networkAddr(i+1), pct: parseFloat((4.5 - i*0.4 + Math.random()*0.3).toFixed(2)),
+    bal: 4_500_000 - i*350_000 + Math.random()*120_000,
+    tag: ["Treasury","Liquidity","Validator","CEX","Whale","Whale","Whale","Whale","Whale","Whale"][i],
+  }));
+
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-[20px] sm:text-[22px] font-semibold tracking-tight">Analytics</h1>
+          <p className="text-[13px] text-ink-400">On-chain intelligence for the {PROJECT_CONFIG.name} ecosystem.</p>
+        </div>
+        <div className="flex items-center bg-bg rounded-lg p-1 border border-line w-fit">
+          {["1H","24H","7D","30D","ALL"].map(x=>(
+            <button key={x} onClick={()=>setTf(x)}
+              className={"px-2.5 py-1 text-[12px] rounded-md transition-colors "+(tf===x?"bg-hover text-ink-50":"text-ink-400")}>{x}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="surface p-4 sm:p-5 lg:col-span-2">
+          <h3 className="text-[14px] font-semibold mb-2">Price · {tf}</h3>
+          <div className="h-56 sm:h-72">
+            <ResponsiveContainer>
+              <AreaChart data={series} margin={{top:8,right:8,left:0,bottom:0}}>
+                <defs>
+                  <linearGradient id="pa" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.30}/>
+                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
+                <XAxis dataKey="label" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
+                <YAxis stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v=>'$'+v.toFixed(2)} width={48}/>
+                <Tooltip formatter={(v,n)=>[fmt.usd(v,3), n]}/>
+                <Area type="monotone" dataKey="price" stroke="#8b5cf6" fill="url(#pa)" strokeWidth={1.6} isAnimationActive={false}/>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="surface p-4 sm:p-5">
+          <h3 className="text-[14px] font-semibold mb-2">Volume · {tf}</h3>
+          <div className="h-56 sm:h-72">
+            <ResponsiveContainer>
+              <BarChart data={series} margin={{top:8,right:8,left:0,bottom:0}}>
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
+                <XAxis dataKey="label" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
+                <YAxis stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
+                <Tooltip formatter={v=>fmt.compact(v*1_000_000)}/>
+                <Bar dataKey="volume" fill="#a78bfa" radius={[3,3,0,0]} maxBarSize={14}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="surface p-4 sm:p-5">
+          <h3 className="text-[14px] font-semibold mb-3">Holder distribution</h3>
+          <div className="space-y-2.5">
+            {HOLDER_DIST.map(h => (
+              <div key={h.tier}>
+                <div className="flex justify-between text-[12px] mb-1">
+                  <span className="font-medium" style={{color:h.color}}>{h.tier}</span>
+                  <span className="font-mono">{h.percent}%</span>
+                </div>
+                <div className="h-1.5 bg-hover rounded-full overflow-hidden"><div className="h-full" style={{ width: h.percent*3.5+'%', background: h.color }}/></div>
+                <div className="text-[10px] text-ink-500 mt-0.5">{fmt.num(h.count)} addresses</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="surface p-4 sm:p-5 lg:col-span-2">
+          <h3 className="text-[14px] font-semibold mb-3">Liquidity depth</h3>
+          <div className="h-56">
+            <ResponsiveContainer>
+              <ComposedChart data={liquidity} margin={{top:8,right:8,left:0,bottom:0}}>
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
+                <XAxis dataKey="delta" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v=>(v>=0?'+':'')+v+'%'}/>
+                <YAxis stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
+                <Tooltip/>
+                <Area type="step" dataKey="bid" stroke="#34d399" fill="rgba(52,211,153,0.18)" strokeWidth={1.4}/>
+                <Area type="step" dataKey="ask" stroke="#f87171" fill="rgba(248,113,113,0.18)" strokeWidth={1.4}/>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="surface p-4 sm:p-5 lg:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[14px] font-semibold">Network activity (UTC, 7d)</h3>
+            <span className="text-[11px] text-ink-500">Per-hour transactions</span>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="grid grid-cols-[36px_repeat(24,minmax(14px,1fr))] gap-[2px] min-w-[560px]">
+              <span></span>
+              {Array.from({length:24}).map((_,i)=>(<span key={i} className="text-[9px] text-ink-500 text-center">{i}</span>))}
+              {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d, ri) => (
+                <Fragment key={d}>
+                  <span className="text-[10px] text-ink-400 self-center">{d}</span>
+                  {Array.from({length:24}).map((_,ci) => {
+                    const v = heatmap.find(x=>x.r===ri && x.c===ci)?.v ?? 0;
+                    const opacity = 0.10 + v*0.85;
+                    return <div key={ci} className="aspect-square rounded-sm" title={`${d} ${ci}:00`} style={{ background: `rgba(79,141,249,${opacity})` }}/>;
+                  })}
+                </Fragment>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-3 text-[10px] text-ink-500">
+            <span>Less</span>
+            {[0.10,0.30,0.50,0.70,0.92].map(o => <div key={o} className="w-3.5 h-3.5 rounded-sm" style={{background: `rgba(79,141,249,${o})`}}/>)}
+            <span>More</span>
+          </div>
+        </div>
+        <div className="surface p-4 sm:p-5">
+          <h3 className="text-[14px] font-semibold mb-3">Top holders</h3>
+          <div className="space-y-1">
+            {topHolders.map(h => (
+              <div key={h.rank} className="flex items-center gap-2 text-[12px] py-1.5 px-1 row-hover rounded">
+                <span className="text-ink-500 w-6 text-right tnum">#{h.rank}</span>
+                <Identicon seed={h.rank*7+1} size={18}/>
+                <span className="font-mono truncate flex-1">{fmt.short(h.addr,5,4)}</span>
+                <span className="chip text-[10px]">{h.tag}</span>
+                <span className="font-mono w-12 text-right tnum">{h.pct}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <TransactionsTable/>
+    </div>
+  );
+}
+
+function TransactionsTable(){
+  const all = useMemo(()=> Array.from({length: 60}, (_,i)=>genTx(i+200)), []);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("All");
+  const [sort, setSort] = useState({ key:"time", dir:-1 });
+  const filtered = useMemo(()=>{
+    let arr = all.filter(t => filter==='All' || t.type===filter)
+                 .filter(t => !search || t.from.includes(search) || t.to.includes(search) || t.tokenA.symbol.toLowerCase().includes(search.toLowerCase()));
+    arr = arr.slice().sort((a,b)=> {
+      const x = sort.key==='time'? a.time-b.time : sort.key==='amount'? a.amount-b.amount : sort.key==='usd'? a.usd-b.usd : 0;
+      return x * sort.dir;
+    });
+    return arr.slice(0, 12);
+  }, [all, filter, search, sort]);
+  const SortBtn = ({k, label}) => (
+    <button className="text-[10px] uppercase tracking-wider text-ink-500 hover:text-ink-50 inline-flex items-center gap-1"
+      onClick={()=>setSort(s=>({key:k, dir:s.key===k?-s.dir:-1}))}>
+      {label}{sort.key===k && <span>{sort.dir>0?'↑':'↓'}</span>}
+    </button>
+  );
+  return (
+    <div className="surface">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b border-line">
+        <h3 className="text-[14px] font-semibold">Transactions</h3>
+        <div className="flex flex-wrap gap-2">
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search" className="input w-44 sm:w-64 text-[13px] py-1.5"/>
+          <select value={filter} onChange={e=>setFilter(e.target.value)} className="input w-28 text-[13px] py-1.5">
+            <option>All</option>
+            {TX_TYPES.map(t=>(<option key={t}>{t}</option>))}
+          </select>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr>
+              <th className="text-left font-normal py-2 pl-4 sm:pl-5"><span className="text-[10px] uppercase tracking-wider text-ink-500">Type</span></th>
+              <th className="text-left font-normal py-2 hidden sm:table-cell"><span className="text-[10px] uppercase tracking-wider text-ink-500">From</span></th>
+              <th className="text-left font-normal py-2 hidden md:table-cell"><span className="text-[10px] uppercase tracking-wider text-ink-500">To</span></th>
+              <th className="text-right font-normal py-2"><SortBtn k="amount" label="Amount"/></th>
+              <th className="text-right font-normal py-2 hidden sm:table-cell"><SortBtn k="usd" label="Value"/></th>
+              <th className="text-right font-normal py-2 pr-4 sm:pr-5"><SortBtn k="time" label="Time"/></th>
+            </tr>
+          </thead>
+          <tbody>
+          {filtered.map(tx => (
+            <tr key={tx.id} className="row-hover border-t border-line">
+              <td className="py-2 pl-4 sm:pl-5 font-medium">{tx.type}</td>
+              <td className="py-2 font-mono text-ink-300 hidden sm:table-cell">{fmt.short(tx.from,4,4)}</td>
+              <td className="py-2 font-mono text-ink-300 hidden md:table-cell">{fmt.short(tx.to,4,4)}</td>
+              <td className="py-2 text-right font-mono">{fmt.compact(tx.amount)} {tx.tokenA.symbol}</td>
+              <td className="py-2 text-right font-mono text-ink-400 hidden sm:table-cell">{fmt.usd(tx.usd,0)}</td>
+              <td className="py-2 pr-4 sm:pr-5 text-right text-ink-500 tnum">{fmt.ago(tx.time)}</td>
+            </tr>
+          ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   PROFILE
+   ───────────────────────────────────────────────────────── */
+function ProfilePage(){
+  const { wallet, setShowWallet, pushToast } = useApp();
+  const [tab, setTab] = useState("overview");
+  const [theme, setTheme] = useState({ accent:'#4f8df9', accent2:'#22d3ee' });
+  const [network, setNetwork] = useState(PROJECT_CONFIG.network);
+  const [notif, setNotif] = useState({ price:true, gov:true, news:false });
+  const apply = () => {
+    document.documentElement.style.setProperty('--accent', theme.accent);
+    document.documentElement.style.setProperty('--accent-2', theme.accent2);
+    pushToast({ kind:'success', title:'Theme updated' });
+  };
+
+  const portfolioHistory = Array.from({length: 60}, (_,i)=>({ d: i, v: 30000 + Math.sin(i/4)*4000 + Math.random()*2000 + i*120 }));
+
+  if(!wallet){
+    return (
+      <div className="surface p-10 text-center max-w-md mx-auto mt-12">
+        <Icon name="wallet" size={26} className="text-ink-400 inline-flex mb-2"/>
+        <h2 className="text-[16px] font-semibold">Connect your wallet</h2>
+        <p className="text-[13px] text-ink-400 mt-1">Sign in with a Web3 wallet to view your wallet, NFTs and history.</p>
+        <button onClick={()=>setShowWallet(true)} className="btn btn-primary mt-3">Connect wallet</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <div className="surface p-4 sm:p-5">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <Identicon seed={wallet.seed} size={56}/>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-[18px] font-semibold">Wallet</h1>
+                <span className="chip"><span className="dot"/> {wallet.provider.label}</span>
+              </div>
+              <button onClick={()=>{ navigator.clipboard?.writeText(wallet.address); pushToast({kind:'success',title:'Address copied'}); }}
+                className="font-mono text-[12px] text-ink-400 hover:text-ink-50 flex items-center gap-1.5 mt-1">
+                {fmt.short(wallet.address,8,6)} <Icon name="copy" size={11}/>
+              </button>
+            </div>
+          </div>
+          <div className="md:ml-auto md:text-right">
+            <div className="text-[10px] uppercase tracking-wider text-ink-500">Total value</div>
+            <div className="text-[24px] font-semibold tracking-tight"><CountUp value={64760} prefix="$"/></div>
+            <div className="text-[12px] text-pos">+8.4% (24h)</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-b border-line overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 min-w-max">
+          {[
+            ["overview","Overview"],
+            ["transactions","Transactions"],
+            ["nfts","NFTs"],
+            ["staking","Staking"],
+            ["settings","Settings"],
+          ].map(([k,label])=>(
+            <button key={k} onClick={()=>setTab(k)}
+              className={"relative px-4 py-2.5 text-[13px] font-medium transition-colors "+(tab===k?"text-ink-50":"text-ink-400 hover:text-ink-200")}>
+              {label}
+              {tab===k && <span className="absolute left-3 right-3 -bottom-px h-[2px] rounded-full" style={{background:'var(--accent)'}}/>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab==='overview' && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <StatCard label="Tokens" value={50_560} prefix="$" change={6.2}/>
+            <StatCard label="NFTs" value={6_820} prefix="$" change={12.1}/>
+            <StatCard label="Staked" value={6_600} prefix="$" change={2.4}/>
+            <StatCard label="Pending" value={780} prefix="$" change={4.8}/>
+          </div>
+          <div className="surface p-4 sm:p-5">
+            <h3 className="text-[14px] font-semibold mb-3">Portfolio · 60 days</h3>
+            <div className="h-48 sm:h-60">
+              <ResponsiveContainer>
+                <AreaChart data={portfolioHistory} margin={{top:8,right:8,left:0,bottom:0}}>
+                  <defs>
+                    <linearGradient id="pp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
+                  <XAxis dataKey="d" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
+                  <YAxis stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v=>'$'+(v/1000).toFixed(0)+'k'}/>
+                  <Tooltip formatter={v=>fmt.usd(v,0)}/>
+                  <Area type="monotone" dataKey="v" stroke="#8b5cf6" fill="url(#pp)" strokeWidth={1.6} isAnimationActive={false}/>
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+            <YourAssets/>
+            <div className="surface p-4 sm:p-5 lg:col-span-2">
+              <h3 className="text-[14px] font-semibold mb-3">Your collection</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {NFT_GRID.slice(0,6).map(n=>(
+                  <div key={n.id} className="surface surface-hover overflow-hidden">
+                    <div className="overflow-hidden" style={{aspectRatio:'1/1'}}><NFTArt seed={n.seed} w={300} h={300}/></div>
+                    <div className="p-2 text-[12px]">
+                      <div className="truncate">{n.name}</div>
+                      <div className="text-ink-500 font-mono">{n.price} SOL</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {tab==='transactions' && (
+        <div className="surface">
+          <div className="px-4 sm:px-5 py-3 border-b border-line flex items-center justify-between">
+            <h3 className="text-[14px] font-semibold">All transactions</h3>
+            <button className="text-[12px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1">
+              Export <Icon name="download" size={12}/>
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wider text-ink-500">
+                  <th className="text-left font-normal py-2 pl-4 sm:pl-5">Type</th>
+                  <th className="text-left font-normal py-2 hidden sm:table-cell">Tx hash</th>
+                  <th className="text-right font-normal py-2">Amount</th>
+                  <th className="text-right font-normal py-2 hidden md:table-cell">Value</th>
+                  <th className="text-right font-normal py-2 pr-4 sm:pr-5">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+              {Array.from({length: 12}, (_,i) => genTx(i+777)).map(tx => (
+                <tr key={tx.id} className="row-hover border-t border-line">
+                  <td className="py-2.5 pl-4 sm:pl-5 font-medium">{tx.type}</td>
+                  <td className="py-2.5 font-mono text-ink-400 hidden sm:table-cell">{tx.txHash}</td>
+                  <td className="py-2.5 text-right font-mono">{fmt.compact(tx.amount)} {tx.tokenA.symbol}</td>
+                  <td className="py-2.5 text-right font-mono text-ink-400 hidden md:table-cell">{fmt.usd(tx.usd,0)}</td>
+                  <td className="py-2.5 pr-4 sm:pr-5 text-right text-ink-500 tnum">{fmt.ago(tx.time)}</td>
+                </tr>
+              ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab==='nfts' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-[15px] font-semibold">Your collection</h3>
+              <p className="text-[12px] text-ink-400 mt-0.5">{NFT_GRID.slice(0,9).length} items · est. {fmt.usd(NFT_GRID.slice(0,9).reduce((s,n)=>s+n.price*184.21,0),0)}</p>
+            </div>
+            <Link to="/marketplace" className="btn btn-secondary text-[12px]">Browse marketplace <Icon name="arrow-right" size={12}/></Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+            {NFT_GRID.slice(0,9).map(n => (
+              <button key={n.id} onClick={()=>setActiveNFT(n)} className="surface surface-hover overflow-hidden text-left">
+                <div className="overflow-hidden bg-hover" style={{aspectRatio:'4/5'}}><NFTArt seed={n.seed} w={400} h={500}/></div>
+                <div className="p-3">
+                  <div className="text-[12.5px] font-medium truncate">{n.name}</div>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <div className="text-[11px] text-ink-500 truncate">{n.artist}</div>
+                    <div className="text-[11.5px] font-mono">{n.price} SOL</div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab==='staking' && (
+        <div className="space-y-4">
+          <div className="surface p-4 sm:p-5">
+            <h3 className="text-[14px] font-semibold mb-3">Active positions</h3>
+            {wallet ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-wider text-ink-500">
+                      <th className="text-left font-normal py-2">Pool</th>
+                      <th className="text-right font-normal py-2">Staked</th>
+                      <th className="text-center font-normal py-2 hidden sm:table-cell">Lock</th>
+                      <th className="text-right font-normal py-2 hidden sm:table-cell">APR</th>
+                      <th className="text-right font-normal py-2">Pending</th>
+                      <th className="text-right font-normal py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                  {[
+                    { pool: PROJECT_CONFIG.ticker+" Single", amount: 5400, lockedFor: "90d", endsIn: 32, pending: 184.5, apr: 22.3 },
+                    { pool: "Genesis Pool", amount: 1200, lockedFor: "180d", endsIn: 121, pending: 88.2, apr: 64.2 },
+                  ].map((p,i)=>(
+                    <tr key={i} className="border-t border-line row-hover">
+                      <td className="py-3 font-medium">{p.pool}</td>
+                      <td className="py-3 text-right font-mono">{fmt.num(p.amount,0)}</td>
+                      <td className="py-3 text-center text-ink-400 hidden sm:table-cell text-[12px]">{p.lockedFor} · {p.endsIn}d</td>
+                      <td className="py-3 text-right text-pos hidden sm:table-cell">{p.apr.toFixed(1)}%</td>
+                      <td className="py-3 text-right font-mono text-pos">+{p.pending.toFixed(2)}</td>
+                      <td className="py-3 text-right">
+                        <button onClick={()=>pushToast({kind:'success', title:'Rewards claimed', body:`+${p.pending.toFixed(2)} ${PROJECT_CONFIG.ticker}`})}
+                          className="btn btn-primary text-[11px] px-2.5 py-1">Claim</button>
+                      </td>
+                    </tr>
+                  ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-[13px] text-ink-400">Connect wallet to see positions.</div>
+            )}
+          </div>
+          <div className="flex justify-center">
+            <Link to="/staking" className="btn btn-secondary text-[12.5px]">Explore staking pools <Icon name="arrow-right" size={12}/></Link>
+          </div>
+        </div>
+      )}
+
+      {tab==='settings' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          <div className="surface p-4 sm:p-5">
+            <h3 className="text-[14px] font-semibold mb-3">Network</h3>
+            <div className="space-y-2">
+              {["Solana","Ethereum","Base","Aetheria L2"].map(n=>(
+                <button key={n} onClick={()=>setNetwork(n)} className={"w-full flex items-center justify-between px-3 py-2.5 rounded-lg border transition-colors "+(network===n?"border-line-2 bg-hover":"border-line hover:border-line-2")}>
+                  <span className="text-[13px]">{n}</span>
+                  {network===n && <span className="chip chip-pos text-[10px]">Active</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="surface p-4 sm:p-5">
+            <h3 className="text-[14px] font-semibold mb-3">Notifications</h3>
+            <div className="space-y-3">
+              {[
+                ['price','Price alerts','Big moves on watched assets'],
+                ['gov','Governance','Proposals you can vote on'],
+                ['news','News & updates','Releases & ecosystem updates'],
+              ].map(([k,t,d])=>(
+                <div key={k} className="flex items-center gap-3">
+                  <span className="switch" data-on={notif[k]} onClick={()=>setNotif(n=>({...n,[k]:!n[k]}))}><span/></span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-medium">{t}</div>
+                    <div className="text-[11px] text-ink-500">{d}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="surface p-4 sm:p-5 lg:col-span-2">
+            <h3 className="text-[14px] font-semibold mb-3">Theme</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                ['accent','Primary'],
+                ['accent2','Secondary'],
+              ].map(([k,t])=>(
+                <div key={k} className="surface p-3">
+                  <div className="text-[11px] text-ink-500 uppercase tracking-wider">{t}</div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <input type="color" value={theme[k]} onChange={e=>setTheme(th=>({...th,[k]:e.target.value}))} className="w-9 h-9 rounded bg-transparent border-0"/>
+                    <input type="text" value={theme[k]} onChange={e=>setTheme(th=>({...th,[k]:e.target.value}))} className="input font-mono text-[13px]"/>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button onClick={apply} className="btn btn-primary">Apply</button>
+              <button onClick={()=>setTheme({ accent:'#4f8df9', accent2:'#22d3ee' })} className="btn btn-secondary">Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   TX CONFIRM MODAL
+   ───────────────────────────────────────────────────────── */
+function TxModal(){
+  const { activeTxModal, setActiveTxModal, pushToast } = useApp();
+  const [step, setStep] = useState("review");
+  useEffect(()=>{ setStep("review"); }, [activeTxModal]);
+  if(!activeTxModal) return null;
+  const t = activeTxModal;
+  const Row = ({k,v}) => <div className="flex justify-between text-[13px] py-1.5"><span className="text-ink-500">{k}</span><span className="font-mono text-ink-100">{v}</span></div>;
+  const confirm = () => {
+    setStep("signing");
+    setTimeout(()=>{
+      setStep("success");
+      setTimeout(()=>{
+        setActiveTxModal(null);
+        pushToast({kind:'success', title:'Transaction confirmed', body: t.type+' '+(t.token?.symbol||'')+(t.nft?' · '+t.nft.name:'')});
+      }, 900);
+    }, 1100);
+  };
+  return (
+    <Modal open onClose={()=>setActiveTxModal(null)} title={"Confirm "+t.type}>
+      {step==='review' && (
+        <div className="space-y-3">
+          <div className="surface p-3">
+            <Row k="Action" v={t.type}/>
+            <Row k="Asset" v={t.token?.symbol || '—'}/>
+            <Row k="Amount" v={t.nft? t.amount + ' SOL' : fmt.num(t.amount,2)+' '+(t.token?.symbol||'')}/>
+            {t.nft && <Row k="NFT" v={t.nft.name}/>}
+            <Row k="Network" v={PROJECT_CONFIG.network}/>
+            <Row k="Network fee" v="~0.00012 SOL"/>
+            <Row k="Slippage" v="0.5%"/>
+          </div>
+          <p className="text-[10px] text-ink-500 text-center">Verify the destination. Transactions are final once signed.</p>
+          <div className="flex gap-2">
+            <button onClick={()=>setActiveTxModal(null)} className="flex-1 btn btn-secondary justify-center">Cancel</button>
+            <button onClick={confirm} className="flex-1 btn btn-primary justify-center">Confirm</button>
+          </div>
+        </div>
+      )}
+      {step==='signing' && (
+        <div className="py-12 text-center">
+          <div className="inline-block w-9 h-9 rounded-full border-2 border-line border-t-accent animate-spin"/>
+          <div className="text-[13px] mt-3 text-ink-300">Awaiting signature…</div>
+        </div>
+      )}
+      {step==='success' && (
+        <div className="py-10 text-center">
+          <div className="inline-flex w-12 h-12 rounded-full items-center justify-center" style={{background:'rgba(16,185,129,0.15)'}}>
+            <Icon name="check" size={22} className="text-pos"/>
+          </div>
+          <div className="text-[15px] font-semibold mt-2">Transaction sent</div>
+          <div className="text-[11px] text-ink-500 mt-1 font-mono">{("0x"+(Math.random()*1e16|0).toString(16)).slice(0,18)}…</div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   SHELL & ROUTER
+   ───────────────────────────────────────────────────────── */
+function Shell(){
+  const { sidebarCollapsed } = useApp();
+  const loc = useLocation();
+  useEffect(()=>{ window.scrollTo(0,0); }, [loc.pathname]);
+  return (
+    <div className="min-h-screen">
+      <Sidebar/>
+      <div className={"transition-[padding] "+(sidebarCollapsed?"lg:pl-[68px]":"lg:pl-[230px]")}>
+        <Header/>
+        <main className="px-3 sm:px-5 py-4 sm:py-6 pb-24 lg:pb-12 max-w-[1500px] mx-auto">
+          <Outlet/>
+        </main>
+      </div>
+      <MobileTabs/>
+      <WalletModal/>
+      <SearchModal/>
+      <NFTDetailModal/>
+      <StakeModal/>
+      <TxModal/>
+      <ToastHost/>
+    </div>
+  );
+}
+
+function App(){
+  return (
+    <AppProvider>
+      <HashRouter>
+        <Routes>
+          <Route element={<Shell/>}>
+            <Route path="/" element={<MarketsPage/>}/>
+            {PROJECT_CONFIG.features.showNFTs && <Route path="/marketplace" element={<MarketplacePage/>}/>}
+            {PROJECT_CONFIG.features.showStaking && <Route path="/staking" element={<StakingPage/>}/>}
+            {PROJECT_CONFIG.features.showGovernance && <Route path="/governance" element={<GovernancePage/>}/>}
+            {PROJECT_CONFIG.features.showAnalytics && <Route path="/analytics" element={<AnalyticsPage/>}/>}
+            <Route path="/profile" element={<ProfilePage/>}/>
+            <Route path="*" element={<MarketsPage/>}/>
+          </Route>
+        </Routes>
+      </HashRouter>
+    </AppProvider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
