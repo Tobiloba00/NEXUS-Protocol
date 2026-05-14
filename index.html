@@ -792,12 +792,74 @@ const STAKING_POOLS = [
   { name: "Genesis Pool",                   symbol: PROJECT_CONFIG.ticker, apr:64.2, tvl: 2_400_000, lockOptions:[30,90,180,365],     minMul:1.2, maxMul:3.0 },
 ];
 
-const FEATURED_COLLECTIONS = [
-  { name: "Chronoglyphs Genesis", floor:1.84, items:8888,  owners:4012, vol24:184.2 },
-  { name: "Temporal Shards",      floor:0.92, items:5000,  owners:2304, vol24:92.8 },
-  { name: "Aeon Sentinels",       floor:3.41, items:3333,  owners:1810, vol24:122.6 },
-  { name: "Voidkeepers",          floor:0.42, items:12000, owners:6840, vol24:41.3 },
+/* ─────────────────────────────────────────────────────────
+   MOCK_COLLECTIONS — initial state + offline fallback for the
+   NFT Featured Collections row. Replaced at runtime by live
+   Magic Eden data via fetchNFTCollections().
+   ───────────────────────────────────────────────────────── */
+const MOCK_COLLECTIONS = [
+  { id: "chronoglyphs",    name: "Chronoglyphs Genesis", image: null, floor: 1.84, volume: 184_200 },
+  { id: "temporal-shards", name: "Temporal Shards",      image: null, floor: 0.92, volume: 92_800  },
+  { id: "aeon-sentinels",  name: "Aeon Sentinels",       image: null, floor: 3.41, volume: 122_600 },
+  { id: "voidkeepers",     name: "Voidkeepers",          image: null, floor: 0.42, volume: 41_300  },
 ];
+
+/* Lamports → SOL helper (1 SOL = 1_000_000_000 lamports) */
+const lamportsToSol = (n) => (typeof n === 'number' && isFinite(n)) ? n / 1e9 : null;
+
+/* Format a SOL volume number as "X.XK SOL" / "X.X SOL" */
+function fmtSolVolume(v){
+  if(v == null) return '—';
+  if(v >= 1000) return (v/1000).toFixed(1) + 'K SOL';
+  if(v >= 1)    return v.toFixed(1) + ' SOL';
+  return v.toFixed(2) + ' SOL';
+}
+
+/* Magic Eden public marketplace API — free, no key required.
+   Two-stage fetch: /v2/collections returns metadata only (no floor or
+   volume), so we follow up with /v2/collections/{symbol}/stats in
+   parallel for the top N collections. Note: ME requires limit & offset
+   to be multiples of 20, hence limit=20. */
+const MAGICEDEN_LIST_URL  = "https://api-mainnet.magiceden.dev/v2/collections?offset=0&limit=20";
+const MAGICEDEN_STATS_URL = (sym) =>
+  "https://api-mainnet.magiceden.dev/v2/collections/" + encodeURIComponent(sym) + "/stats";
+
+async function fetchNFTCollections(){
+  try {
+    const res = await fetch(MAGICEDEN_LIST_URL, { headers: { accept: "application/json" } });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data = await res.json();
+    if(!Array.isArray(data)) throw new Error("unexpected payload");
+
+    // Keep top 8 viable rows (need at least name + image)
+    const viable = data
+      .filter(c => c && c.symbol && c.name && c.image)
+      .slice(0, 8);
+
+    // Parallel-fetch /stats for each — gives us floorPrice + volumeAll
+    const stats = await Promise.all(viable.map(async (c) => {
+      try {
+        const sr = await fetch(MAGICEDEN_STATS_URL(c.symbol), { headers: { accept: "application/json" } });
+        if(!sr.ok) return null;
+        return await sr.json();
+      } catch { return null; }
+    }));
+
+    return viable.map((c, i) => {
+      const s = stats[i] || {};
+      return {
+        id:     c.symbol,
+        name:   c.name,
+        image:  c.image,
+        floor:  typeof s.floorPrice === 'number' ? lamportsToSol(s.floorPrice) : null,
+        volume: typeof s.volumeAll  === 'number' ? lamportsToSol(s.volumeAll)  : null,
+      };
+    });
+  } catch (e) {
+    console.warn("[NEXUS] Magic Eden fetch failed — using fallback:", e?.message || e);
+    return null;
+  }
+}
 
 /* ─────────────────────────────────────────────────────────
    APP CONTEXT
@@ -849,6 +911,36 @@ function AppProvider({ children }){
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
+  /* NFT collections — Magic Eden, refreshed every 60s.
+     `loading: true` only while the FIRST fetch is in flight, so
+     subsequent background refreshes don't flash skeletons. */
+  const [collections, setCollections] = useState(MOCK_COLLECTIONS);
+  const [collectionsStatus, setCollectionsStatus] = useState({ source: 'mock', loading: true, updatedAt: null, error: null });
+
+  useEffect(()=>{
+    let cancelled = false;
+    let firstLoad = true;
+    const sync = async () => {
+      const real = await fetchNFTCollections();
+      if(cancelled) return;
+      if(real && real.length){
+        setCollections(real);
+        setCollectionsStatus({ source: 'live', loading: false, updatedAt: Date.now(), error: null });
+      } else {
+        setCollectionsStatus(s => ({
+          ...s,
+          source: s.source === 'live' ? 'stale' : 'mock',
+          loading: false,
+          error: 'Magic Eden unavailable',
+        }));
+      }
+      firstLoad = false;
+    };
+    sync();
+    const id = setInterval(sync, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
   const pushToast = useCallback((t) => {
     const id = Math.random().toString(36).slice(2);
     setToasts(p => [...p, { id, ...t }]);
@@ -885,6 +977,7 @@ function AppProvider({ children }){
       activeStakeModal, setActiveStakeModal,
       theme,
       tokens, marketStatus,
+      collections, collectionsStatus,
     }}>{children}</AppCtx.Provider>
   );
 }
@@ -2188,6 +2281,87 @@ const SORT_OPTIONS = [
   { id:"sales",      label:"Most collected" },
 ];
 
+function FeaturedCollections(){
+  const { collections, collectionsStatus } = useApp();
+  const top = collections.slice(0, 4);
+  const isInitialLoad = collectionsStatus.loading && collectionsStatus.source === 'mock';
+  const ago = collectionsStatus.updatedAt
+    ? Math.floor((Date.now()-collectionsStatus.updatedAt)/1000)
+    : null;
+
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-[14px] font-semibold">Featured collections</h3>
+          {collectionsStatus.source === 'live' && (
+            <span className="chip chip-pos" title={"Live from Magic Eden" + (ago!=null ? " · refreshed "+ago+"s ago" : "")}>
+              <span className="dot"/> Magic Eden
+            </span>
+          )}
+          {collectionsStatus.source === 'stale' && (
+            <span className="chip chip-neg"><Icon name="wifi-off" size={11}/> Reconnecting</span>
+          )}
+          {collectionsStatus.source === 'mock' && !collectionsStatus.loading && (
+            <span className="chip"><Icon name="database" size={11}/> Sample data</span>
+          )}
+        </div>
+        <button className="text-[12px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1">View all <Icon name="chevron-right" size={12}/></button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {isInitialLoad
+          ? Array.from({length: 4}).map((_, i) => (
+              <div key={i} className="surface overflow-hidden">
+                <div className="aspect-square skel"/>
+                <div className="p-3 space-y-2">
+                  <div className="h-3 w-3/4 skel"/>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="space-y-1.5"><div className="h-2 w-10 skel"/><div className="h-3 w-12 skel"/></div>
+                    <div className="space-y-1.5"><div className="h-2 w-10 skel"/><div className="h-3 w-12 skel"/></div>
+                  </div>
+                </div>
+              </div>
+            ))
+          : top.map((c) => (
+              <div key={c.id} className="surface surface-hover overflow-hidden cursor-pointer">
+                <div className="aspect-square overflow-hidden bg-hover relative">
+                  {c.image ? (
+                    <img
+                      src={c.image}
+                      alt={c.name}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                      onError={(e)=>{ e.currentTarget.style.display='none'; }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-ink-400">
+                      <Icon name="image" size={28}/>
+                    </div>
+                  )}
+                </div>
+                <div className="p-3">
+                  <div className="text-[13px] font-medium truncate" title={c.name}>{c.name}</div>
+                  <div className="grid grid-cols-2 gap-2 mt-2 text-[11px]">
+                    <div>
+                      <div className="text-ink-500">Floor</div>
+                      <div className="font-mono">{c.floor != null ? c.floor.toFixed(2) + ' SOL' : '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-ink-500">Volume</div>
+                      <div className="font-mono">{fmtSolVolume(c.volume)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+        }
+      </div>
+    </div>
+  );
+}
+
 function MarketplacePage(){
   const { setActiveNFT, showFilters, setShowFilters } = useApp();
   const [tab, setTab] = useState("curated");
@@ -2243,6 +2417,9 @@ function MarketplacePage(){
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      {/* Featured collections (live from Magic Eden, with skeleton on first load) */}
+      <FeaturedCollections/>
+
       {/* Curated / All / Trending / Liquid Editions */}
       <div className="-mx-3 sm:-mx-6 px-3 sm:px-6 overflow-x-auto no-scrollbar border-b border-line">
         <div className="flex items-center gap-5 sm:gap-7 min-w-max">
