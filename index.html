@@ -1078,16 +1078,18 @@ async function fetchNFTCollections(){
       
       const currency = c.native_currency_symbol ? c.native_currency_symbol.toUpperCase() : 'ETH';
 
-      // CoinGecko serves the source-resolution image at /original/ on
-      // the same CDN path. /large/ caps around 200px; /original/ is
-      // whatever the project uploaded (typically 400–1000px).
+      // CoinGecko's /search/trending NFT entries cap out at /large/
+      // (verified: /original/ returns 4xx XML on the NFT contract CDN).
+      // We use /large/ directly and rely on the backdrop-blur + natural-
+      // size rendering in <FeaturedCollections> + <LenticularCard> to
+      // make the modest source resolution look intentional instead of
+      // upscaled-and-mushy.
       const baseImg = c.large || c.small || c.thumb || '';
-      const hiResImg = baseImg.replace(/\/(thumb|small|large)\//, '/original/');
       return {
         id:     c.id,
         name:   c.name,
-        image:  hiResImg || baseImg,
-        imageLow: baseImg, // fallback for onError
+        image:  baseImg,
+        imageLow: c.small || c.thumb || baseImg, // onError fallback
         floor:  floor !== null ? floor : (typeof c.floor_price_in_native_currency === 'number' ? c.floor_price_in_native_currency : null),
         volume: vol,
         currency: currency
@@ -2729,21 +2731,40 @@ function FeaturedCollections(){
                 className="surface surface-hover overflow-hidden cursor-pointer group text-left w-full">
                 <div className="aspect-square overflow-hidden bg-hover relative">
                   {c.image ? (
-                    <img
-                      src={c.image}
-                      alt={c.name}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      onError={(e)=>{
-                        // If /original/ 404s on this CDN object, swap back to /large/
-                        if(c.imageLow && e.currentTarget.src !== c.imageLow){
-                          e.currentTarget.src = c.imageLow;
-                        } else {
-                          e.currentTarget.style.display='none';
-                        }
-                      }}
-                    />
+                    <>
+                      {/* Blurred backdrop — same image, scaled + heavily blurred, fills card with the image's colors */}
+                      <img
+                        src={c.image}
+                        alt=""
+                        aria-hidden="true"
+                        loading="lazy"
+                        decoding="async"
+                        className="absolute inset-0 w-full h-full object-cover scale-125 opacity-60"
+                        style={{ filter: 'blur(24px) saturate(1.4)' }}
+                        onError={(e)=>{ e.currentTarget.style.display='none'; }}
+                      />
+                      {/* Light dark veil so the foreground reads against the haze */}
+                      <div className="absolute inset-0 pointer-events-none" style={{ background:'rgba(0,0,0,0.10)' }}/>
+                      {/* Foreground — rendered at NATURAL size (no upscale, no bicubic blur).
+                          For square 200px logos in a 280px card the image shows ~70% — crisp instead of mushy. */}
+                      <div className="absolute inset-0 flex items-center justify-center p-[10%]">
+                        <img
+                          src={c.image}
+                          alt={c.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-110 drop-shadow-lg"
+                          style={{ imageRendering: '-webkit-optimize-contrast' }}
+                          onError={(e)=>{
+                            if(c.imageLow && e.currentTarget.src !== c.imageLow){
+                              e.currentTarget.src = c.imageLow;
+                            } else {
+                              e.currentTarget.style.display='none';
+                            }
+                          }}
+                        />
+                      </div>
+                    </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-ink-400">
                       <Icon name="image" size={28}/>
@@ -3386,21 +3407,45 @@ function LenticularCard({ image, fallbackImage, name, currency, size = 360 }){
             : `0 16px 40px -20px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06) inset`,
         }}
       >
-        {/* Base image */}
-        {image ? (
+        {/* Blurred backdrop — same image stretched + blurred so the
+            card never has bare edges. Solves "low-res image looks
+            blurry when upscaled" by keeping the foreground at native
+            size and using the haze for richness. */}
+        {image && (
           <img
             src={image}
-            alt={name || ''}
-            loading="eager"
-            decoding="async"
+            alt=""
+            aria-hidden="true"
             draggable={false}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover scale-125"
+            style={{ filter: 'blur(28px) saturate(1.5)', opacity: 0.65 }}
             onError={(e)=>{
               if(fallbackImage && e.currentTarget.src !== fallbackImage){
                 e.currentTarget.src = fallbackImage;
               }
             }}
           />
+        )}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'rgba(0,0,0,0.10)' }}/>
+
+        {/* Foreground — rendered at NATURAL resolution, centered. */}
+        {image ? (
+          <div className="absolute inset-0 flex items-center justify-center p-[8%]">
+            <img
+              src={image}
+              alt={name || ''}
+              loading="eager"
+              decoding="async"
+              draggable={false}
+              className="max-w-full max-h-full object-contain drop-shadow-2xl"
+              style={{ imageRendering: '-webkit-optimize-contrast' }}
+              onError={(e)=>{
+                if(fallbackImage && e.currentTarget.src !== fallbackImage){
+                  e.currentTarget.src = fallbackImage;
+                }
+              }}
+            />
+          </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-hover text-ink-400">
             <Icon name="image" size={42}/>
