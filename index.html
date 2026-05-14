@@ -465,6 +465,15 @@
   @keyframes fadeIn { from { opacity:0; transform: translateY(6px) } to { opacity:1; transform: translateY(0) } }
   .fade-in{ animation: fadeIn .28s cubic-bezier(.2,.7,.3,1); }
 
+  /* New-activity entrance — slide from top + soft accent flash so the
+     eye can latch onto rows that just streamed in. */
+  @keyframes activityEnter {
+    0%   { opacity:0; transform: translateY(-10px); background-color: var(--primary-soft); }
+    60%  { opacity:1; transform: translateY(0);     background-color: var(--primary-soft); }
+    100% { opacity:1; transform: translateY(0);     background-color: transparent; }
+  }
+  .activity-enter{ animation: activityEnter .65s ease-out; }
+
   /* Diagonal sheen shimmer (replaces flat linear wipe) */
   .skel{
     position: relative; overflow: hidden;
@@ -913,6 +922,134 @@ function fmtSolVolume(v, sym='SOL'){
    Returns top trending NFTs with floor prices. */
 const COINGECKO_NFT_URL = "https://api.coingecko.com/api/v3/search/trending";
 
+/* ─────────────────────────────────────────────────────────
+   ACTIVITY FEED — recent Solana transfers (live)
+   Primary:  solana.fm /v0/transfers/latest
+   Fallback: Solana mainnet RPC getSignaturesForAddress on the
+             SPL Token program (extremely busy address — gives
+             us real recent signatures with block times)
+   ───────────────────────────────────────────────────────── */
+const MOCK_ACTIVITY = [
+  { id:'m1', kind:"Swap",         icon:"arrow-down-up", desc:"USDC → "+PROJECT_CONFIG.ticker, amt:"+368.42 "+PROJECT_CONFIG.ticker, up:true,  ts: Date.now() - 2*60_000 },
+  { id:'m2', kind:"Deposit",      icon:"arrow-down",    desc:"USDC",        amt:"+1,000.00 USDC", up:true, ts: Date.now() - 15*60_000 },
+  { id:'m3', kind:"Stake",        icon:"layers",        desc:PROJECT_CONFIG.ticker, amt:"−250.00 "+PROJECT_CONFIG.ticker, up:false, ts: Date.now() - 60*60_000 },
+  { id:'m4', kind:"Claim Reward", icon:"gift",          desc:"Staking",     amt:"+12.45 "+PROJECT_CONFIG.ticker, up:true,  ts: Date.now() - 3*60*60_000 },
+];
+
+const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+const SOLANAFM_LATEST = "https://api.solana.fm/v0/transfers/latest?limit=20";
+const SPL_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+/* Shorten a Solana base58 address into "Ab12…Yz9k" */
+function shortAddr(addr){
+  if(!addr || typeof addr !== 'string') return '—';
+  if(addr.length <= 10) return addr;
+  return addr.slice(0,4) + '…' + addr.slice(-4);
+}
+
+/* Type → { kind label, lucide icon name, positive/negative flag } */
+function deriveAction(type){
+  const t = String(type||'').toLowerCase();
+  if(t.includes('swap'))      return { kind:'Swap',    icon:'arrow-down-up', up:true };
+  if(t.includes('stake') && t.includes('un')) return { kind:'Unstake', icon:'layers', up:false };
+  if(t.includes('stake'))     return { kind:'Stake',   icon:'layers', up:false };
+  if(t.includes('mint'))      return { kind:'Mint',    icon:'sparkles', up:true };
+  if(t.includes('claim'))     return { kind:'Claim',   icon:'gift', up:true };
+  if(t.includes('deposit'))   return { kind:'Deposit', icon:'arrow-down', up:true };
+  if(t.includes('withdraw'))  return { kind:'Withdraw',icon:'arrow-up',   up:false };
+  if(t.includes('list'))      return { kind:'List',    icon:'tag', up:true };
+  if(t.includes('sale')||t.includes('sell')) return { kind:'Sale', icon:'shopping-cart', up:true };
+  if(t.includes('transfer'))  return { kind:'Transfer',icon:'arrow-right', up:true };
+  return { kind:'Transfer', icon:'arrow-right', up:true };
+}
+
+/* Map a solana.fm transfer row → our activity shape */
+function parseSolanaFmItem(it, i){
+  const signer    = it?.signer || it?.source || it?.from || it?.feePayer || '';
+  const type      = it?.type   || it?.action || it?.kind || 'Transfer';
+  const tsSeconds = Number(it?.timestamp || it?.blockTime || it?.time || 0);
+  const ts        = tsSeconds > 1e12 ? tsSeconds : tsSeconds * 1000;  // ms vs s autodetect
+  // Try a few common amount fields; solana.fm has historically used 'amount' (in lamports/atomic units)
+  const rawAmount = Number(it?.amount || it?.value || it?.lamports || 0);
+  const decimals  = Number(it?.decimals || 9);
+  const adj       = isFinite(rawAmount) && rawAmount > 0
+                      ? rawAmount / Math.pow(10, decimals)
+                      : 0;
+  const sym       = (it?.tokenSymbol || it?.symbol || (decimals===9 ? 'SOL' : '')).toString();
+  const action    = deriveAction(type);
+  return {
+    id:   it?.signature || it?.txHash || `sfm-${i}-${ts}`,
+    kind: action.kind,
+    icon: action.icon,
+    desc: shortAddr(signer),
+    amt:  adj > 0 ? `${action.up?'+':'−'}${adj.toLocaleString(undefined,{maximumFractionDigits:4})} ${sym}`.trim() : '—',
+    up:   action.up,
+    ts:   ts || Date.now(),
+    source: 'solana.fm',
+  };
+}
+
+/* Map a Solana RPC signature row → our activity shape.
+   Without per-tx hydration we don't have signer or amount, so we
+   surface the truncated signature itself and label it Transfer. */
+function parseRpcSignature(sig){
+  const ts = (Number(sig?.blockTime) || Math.floor(Date.now()/1000)) * 1000;
+  const failed = !!sig?.err;
+  return {
+    id:   sig?.signature || ('rpc-'+Math.random()),
+    kind: failed ? 'Failed' : 'Transfer',
+    icon: failed ? 'x-circle' : 'arrow-right',
+    desc: shortAddr(sig?.signature),
+    amt:  failed ? 'tx reverted' : 'Token program',
+    up:   !failed,
+    ts,
+    source: 'solana-rpc',
+  };
+}
+
+async function fetchRecentActivity(){
+  /* Layer 1 — solana.fm (preferred: real transfer details) */
+  try {
+    const res = await fetch(SOLANAFM_LATEST, { headers: { accept: 'application/json' } });
+    if(res.ok){
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data
+                 : Array.isArray(data?.results) ? data.results
+                 : Array.isArray(data?.data)    ? data.data
+                 : [];
+      if(rows.length){
+        return { items: rows.slice(0, 10).map(parseSolanaFmItem), source: 'solana.fm' };
+      }
+    }
+  } catch (e) {
+    console.warn('[NEXUS] solana.fm fetch failed, trying RPC:', e?.message || e);
+  }
+
+  /* Layer 2 — public Solana RPC (always-on; less detail per row) */
+  try {
+    const res = await fetch(SOLANA_RPC, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1,
+        method: 'getSignaturesForAddress',
+        params: [SPL_TOKEN_PROGRAM, { limit: 20 }],
+      }),
+    });
+    if(res.ok){
+      const data = await res.json();
+      const rows = Array.isArray(data?.result) ? data.result : [];
+      if(rows.length){
+        return { items: rows.slice(0, 10).map(parseRpcSignature), source: 'solana-rpc' };
+      }
+    }
+  } catch (e) {
+    console.warn('[NEXUS] Solana RPC fetch failed:', e?.message || e);
+  }
+
+  return null;
+}
+
 async function fetchNFTCollections(){
   try {
     const res = await fetch(COINGECKO_NFT_URL, { headers: { accept: "application/json" } });
@@ -1047,6 +1184,33 @@ function AppProvider({ children }){
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
+  /* Live activity feed — Solana transfers via solana.fm w/ RPC
+     fallback. 15-second refresh. Items keep the same id across
+     refreshes so the UI can fade in only NEW ones, not the whole list. */
+  const [activity, setActivity] = useState(MOCK_ACTIVITY);
+  const [activityStatus, setActivityStatus] = useState({ source: 'mock', updatedAt: null, error: null });
+
+  useEffect(()=>{
+    let cancelled = false;
+    const sync = async () => {
+      const res = await fetchRecentActivity();
+      if(cancelled) return;
+      if(res && res.items?.length){
+        setActivity(res.items);
+        setActivityStatus({ source: res.source, updatedAt: Date.now(), error: null });
+      } else {
+        setActivityStatus(s => ({
+          ...s,
+          source: s.source === 'mock' ? 'mock' : 'stale',
+          error: 'Activity feed offline',
+        }));
+      }
+    };
+    sync();
+    const id = setInterval(sync, 15_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
   /* NFT collections — Magic Eden, refreshed every 60s.
      `loading: true` only while the FIRST fetch is in flight, so
      subsequent background refreshes don't flash skeletons. */
@@ -1120,6 +1284,7 @@ function AppProvider({ children }){
       theme,
       tokens, marketStatus,
       collections, collectionsStatus,
+      activity, activityStatus,
       showAdmin, setShowAdmin,
       config, setConfig, resetConfig,
     }}>{children}</AppCtx.Provider>
@@ -2140,43 +2305,85 @@ function YourAssets(){
 }
 
 function RecentActivityCard(){
-  const items = [
-    { kind:"Swap",        icon:"arrow-down-up", desc:"USDC → TIME", amt:"+368.42 TIME", up:true,  ago:"2m" },
-    { kind:"Deposit",     icon:"arrow-down",    desc:"USDC",        amt:"+1,000.00 USDC", up:true, ago:"15m" },
-    { kind:"Stake",       icon:"layers",        desc:"TIME",        amt:"−250.00 TIME",  up:false, ago:"1h" },
-    { kind:"Claim Reward",icon:"gift",          desc:"Staking",     amt:"+12.45 TIME",   up:true,  ago:"3h" },
-  ];
+  const { activity, activityStatus } = useApp();
+  const items = (activity || []).slice(0, 10);
+
+  // Track which IDs were already on screen on the previous render so we
+  // can animate only NEW arrivals — not the entire list — every refresh.
+  const seenRef = useRef(new Set(items.map(it => it.id)));
+  const newIds = useRef(new Set());
+  newIds.current = new Set();
+  items.forEach(it => { if(!seenRef.current.has(it.id)) newIds.current.add(it.id); });
+  useEffect(()=>{ seenRef.current = new Set(items.map(it => it.id)); });
+
+  // Re-render every 15s so the "X ago" labels stay fresh between fetches
+  const [, forceTick] = useState(0);
+  useEffect(()=>{ const t = setInterval(()=> forceTick(n=>n+1), 15_000); return ()=> clearInterval(t); }, []);
+
+  // Color tint per kind — defaults to brand purple when unknown
   const tint = (k) => ({
-    "Swap":        ["#10b981","rgba(16,185,129,0.10)"],
-    "Deposit":     ["#22d3ee","rgba(34,211,238,0.10)"],
-    "Stake":       ["#ef4444","rgba(239,68,68,0.10)"],
-    "Claim Reward":["#a78bfa","rgba(167,139,250,0.10)"],
+    "Swap":         ["#10b981","rgba(16,185,129,0.10)"],
+    "Deposit":      ["#22d3ee","rgba(34,211,238,0.10)"],
+    "Stake":        ["#ef4444","rgba(239,68,68,0.10)"],
+    "Unstake":      ["#fbbf24","rgba(251,191,36,0.10)"],
+    "Claim Reward": ["#a78bfa","rgba(167,139,250,0.10)"],
+    "Claim":        ["#a78bfa","rgba(167,139,250,0.10)"],
+    "Transfer":     ["#a78bfa","rgba(167,139,250,0.10)"],
+    "Mint":         ["#22d3ee","rgba(34,211,238,0.10)"],
+    "Sale":         ["#10b981","rgba(16,185,129,0.10)"],
+    "List":         ["#7a8497","rgba(122,132,151,0.10)"],
+    "Failed":       ["#ef4444","rgba(239,68,68,0.10)"],
   }[k] || ["#a78bfa","rgba(167,139,250,0.10)"]);
+
+  const StatusChip = () => {
+    const ago = activityStatus?.updatedAt
+      ? Math.max(0, Math.floor((Date.now()-activityStatus.updatedAt)/1000))
+      : null;
+    if(activityStatus?.source === 'solana.fm'){
+      return <span className="chip chip-pos" title={"Live · solana.fm" + (ago!=null?" · "+ago+"s ago":"")}><span className="dot"/> Live · solana.fm</span>;
+    }
+    if(activityStatus?.source === 'solana-rpc'){
+      return <span className="chip chip-pos" title={"Live · mainnet RPC" + (ago!=null?" · "+ago+"s ago":"")}><span className="dot"/> Live · RPC</span>;
+    }
+    if(activityStatus?.source === 'stale'){
+      return <span className="chip chip-neg"><Icon name="wifi-off" size={11}/> Reconnecting</span>;
+    }
+    return <span className="chip"><Icon name="database" size={11}/> Sample data</span>;
+  };
+
   return (
     <div className="surface p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[14px] font-semibold">Recent Activity</h3>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-[14px] font-semibold">Recent Activity</h3>
+          <StatusChip/>
+        </div>
         <Link to="/profile" className="text-[12px] text-ink-400 hover:text-ink-50">View All</Link>
       </div>
-      <div className="space-y-1">
-        {items.map((it,i)=>{
+      <div className="space-y-1 overflow-hidden">
+        {items.map((it) => {
           const [c, bg] = tint(it.kind);
+          const isNew = newIds.current.has(it.id);
           return (
-            <div key={i} className="flex items-center gap-3 px-1 py-2 rounded-lg row-hover">
+            <div key={it.id}
+              className={"flex items-center gap-3 px-2 py-2 rounded-lg row-hover "+(isNew?"activity-enter":"")}>
               <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:bg, color:c }}>
                 <Icon name={it.icon} size={16}/>
               </span>
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium">{it.kind}</div>
-                <div className="text-[11px] text-ink-500 truncate">{it.desc}</div>
+                <div className="text-[13px] font-medium truncate">{it.kind}</div>
+                <div className="text-[11px] text-ink-500 truncate font-mono">{it.desc}</div>
               </div>
-              <div className="text-right">
+              <div className="text-right flex-shrink-0">
                 <div className={"text-[12.5px] font-mono "+(it.up?"text-pos":"text-neg")}>{it.amt}</div>
-                <div className="text-[11px] text-ink-500">{it.ago} ago</div>
+                <div className="text-[11px] text-ink-500">{it.ts ? fmt.ago(it.ts)+' ago' : ''}</div>
               </div>
             </div>
           );
         })}
+        {items.length === 0 && (
+          <div className="text-center py-6 text-[12px] text-ink-500">No recent activity</div>
+        )}
       </div>
     </div>
   );
