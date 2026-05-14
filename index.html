@@ -1059,7 +1059,7 @@ async function fetchNFTCollections(){
 
     // Keep top 8 viable rows (need at least name + image)
     const viable = data.nfts
-      .filter(c => c && c.id && c.name && c.thumb)
+      .filter(c => c && c.id && c.name && (c.large || c.small || c.thumb))
       .slice(0, 8);
 
     return viable.map(c => {
@@ -1081,7 +1081,9 @@ async function fetchNFTCollections(){
       return {
         id:     c.id,
         name:   c.name,
-        image:  c.thumb,
+        // Prefer the largest available image variant — thumb is ~50px
+        // and pixelates when scaled into the card container.
+        image:  c.large || c.small || c.thumb,
         floor:  floor !== null ? floor : (typeof c.floor_price_in_native_currency === 'number' ? c.floor_price_in_native_currency : null),
         volume: vol,
         currency: currency
@@ -2665,11 +2667,15 @@ const SORT_OPTIONS = [
 
 function FeaturedCollections(){
   const { collections, collectionsStatus } = useApp();
-  const top = collections.slice(0, 4);
   const isInitialLoad = collectionsStatus.loading && collectionsStatus.source === 'mock';
   const ago = collectionsStatus.updatedAt
     ? Math.floor((Date.now()-collectionsStatus.updatedAt)/1000)
     : null;
+
+  const [expanded, setExpanded] = useState(false);
+  const visibleCount = expanded ? Math.min(8, collections.length) : 4;
+  const shown = collections.slice(0, visibleCount);
+  const moreAvailable = collections.length > 4;
 
   return (
     <div className="surface p-4 sm:p-5">
@@ -2688,10 +2694,16 @@ function FeaturedCollections(){
             <span className="chip"><Icon name="database" size={11}/> Sample data</span>
           )}
         </div>
-        <button className="text-[12px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1">View all <Icon name="chevron-right" size={12}/></button>
+        {moreAvailable && (
+          <button onClick={()=>setExpanded(x=>!x)}
+            className="text-[12px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1 transition-colors">
+            {expanded ? 'Show less' : 'View all'}
+            <Icon name={expanded ? "chevron-up" : "chevron-down"} size={12}/>
+          </button>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {isInitialLoad
           ? Array.from({length: 4}).map((_, i) => (
               <div key={i} className="surface overflow-hidden">
@@ -2705,8 +2717,8 @@ function FeaturedCollections(){
                 </div>
               </div>
             ))
-          : top.map((c) => (
-              <div key={c.id} className="surface surface-hover overflow-hidden cursor-pointer">
+          : shown.map((c) => (
+              <div key={c.id} className="surface surface-hover overflow-hidden cursor-pointer group">
                 <div className="aspect-square overflow-hidden bg-hover relative">
                   {c.image ? (
                     <img
@@ -2714,7 +2726,7 @@ function FeaturedCollections(){
                       alt={c.name}
                       loading="lazy"
                       decoding="async"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       onError={(e)=>{ e.currentTarget.style.display='none'; }}
                     />
                   ) : (
@@ -2722,17 +2734,27 @@ function FeaturedCollections(){
                       <Icon name="image" size={28}/>
                     </div>
                   )}
+                  {/* Soft top→bottom shade so the corner chip is readable on any image */}
+                  <div className="absolute inset-x-0 top-0 h-12 pointer-events-none"
+                    style={{background:'linear-gradient(180deg, rgba(0,0,0,0.35), transparent)'}}/>
+                  {/* Currency chip in the corner — quick visual cue for the chain */}
+                  {c.currency && (
+                    <span className="absolute top-2 left-2 chip backdrop-blur-sm text-[10px]"
+                      style={{ background:'rgba(0,0,0,0.55)', borderColor:'rgba(255,255,255,0.15)', color:'#fff' }}>
+                      {c.currency}
+                    </span>
+                  )}
                 </div>
                 <div className="p-3">
-                  <div className="text-[13px] font-medium truncate" title={c.name}>{c.name}</div>
+                  <div className="text-[13px] font-semibold truncate" title={c.name}>{c.name}</div>
                   <div className="grid grid-cols-2 gap-2 mt-2 text-[11px]">
                     <div>
                       <div className="text-ink-500">Floor</div>
-                      <div className="font-mono">{c.floor != null ? (c.floor < 0.1 ? c.floor.toFixed(4) : c.floor.toFixed(2)) + ' ' + (c.currency || 'SOL') : '—'}</div>
+                      <div className="font-mono text-ink-100">{c.floor != null ? (c.floor < 0.1 ? c.floor.toFixed(4) : c.floor.toFixed(2)) + ' ' + (c.currency || 'SOL') : '—'}</div>
                     </div>
                     <div>
                       <div className="text-ink-500">Volume</div>
-                      <div className="font-mono">{fmtSolVolume(c.volume, c.currency)}</div>
+                      <div className="font-mono text-ink-100">{fmtSolVolume(c.volume, c.currency)}</div>
                     </div>
                   </div>
                 </div>
