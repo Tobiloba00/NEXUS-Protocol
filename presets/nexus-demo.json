@@ -1,0 +1,18 @@
+{
+  "name": "NEXUS Protocol",
+  "shortName": "nexus",
+  "ticker": "NXS",
+  "network": "Solana",
+  "contract": "Nx5pR0t0c0L2Tx7vQwK2pRmL4Z5n1DfH3JvA8YsBcNxEfR",
+  "features": {
+    "showNFTs": true,
+    "showStaking": true,
+    "showGovernance": true,
+    "showAnalytics": true
+  },
+  "brand": {
+    "primary": "#8b5cf6",
+    "secondary": "#22d3ee",
+    "logo": ""
+  }
+}
