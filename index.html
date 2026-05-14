@@ -48,6 +48,35 @@
       document.documentElement.setAttribute('data-theme', 'light');
     }
   })();
+
+  /* Apply persisted brand colors BEFORE first paint so the admin
+     panel's most-recent selection survives a reload without flashing
+     the default NEXUS purple. */
+  (function(){
+    try {
+      const raw = localStorage.getItem('nexus-config');
+      if(!raw) return;
+      const cfg = JSON.parse(raw);
+      const b = cfg && cfg.brand;
+      if(!b || !b.primary || !b.secondary) return;
+      const hex2rgb = (h) => {
+        const c = String(h).replace('#','').trim();
+        if(!/^[0-9a-fA-F]{6}$/.test(c)) return null;
+        return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)].join(',');
+      };
+      const p = hex2rgb(b.primary), s = hex2rgb(b.secondary);
+      if(!p || !s) return;
+      const r = document.documentElement.style;
+      r.setProperty('--accent',       b.primary);
+      r.setProperty('--accent-hi',    b.primary);
+      r.setProperty('--accent-2',     b.secondary);
+      r.setProperty('--glow',         p);
+      r.setProperty('--glow-2',       s);
+      r.setProperty('--primary-soft', `rgba(${p}, 0.10)`);
+      r.setProperty('--primary-grad',    `linear-gradient(135deg, ${b.primary} 0%, ${b.secondary} 60%, ${b.primary} 100%)`);
+      r.setProperty('--primary-grad-hi', `linear-gradient(135deg, ${b.secondary} 0%, ${b.primary} 50%, ${b.secondary} 100%)`);
+    } catch(_){}
+  })();
   tailwind.config = {
     theme: {
       extend: {
@@ -500,6 +529,10 @@ const {
 /* ─────────────────────────────────────────────────────────
    PROJECT CONFIG — change once to rebrand
    ───────────────────────────────────────────────────────── */
+/* PROJECT_CONFIG is `const` but its properties are mutated when the
+   admin panel applies a new preset, so direct reads (PROJECT_CONFIG.name)
+   throughout the codebase stay up to date alongside the React state that
+   triggers re-renders. */
 const PROJECT_CONFIG = {
   name: "NEXUS Protocol",
   shortName: "nexus",
@@ -507,7 +540,66 @@ const PROJECT_CONFIG = {
   network: "Solana",
   contract: "Nx5pR0t0c0L2Tx7vQwK2pRmL4Z5n1DfH3JvA8YsBcNxEfR",
   features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
+  brand: { primary: "#8b5cf6", secondary: "#22d3ee", logo: "" },
 };
+
+/* Pre-baked brand identities for the admin panel preset buttons.
+   Each preset sets ALL fields the panel exposes. */
+const CONFIG_PRESETS = {
+  nexus: {
+    name: "NEXUS Protocol",  shortName: "nexus",   ticker: "NXS",
+    network: "Solana",
+    contract: "Nx5pR0t0c0L2Tx7vQwK2pRmL4Z5n1DfH3JvA8YsBcNxEfR",
+    features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
+    brand: { primary: "#8b5cf6", secondary: "#22d3ee", logo: "" },
+  },
+  chronos: {
+    name: "CHRONOS",  shortName: "chronos",  ticker: "TIME",
+    network: "Ethereum",
+    contract: "0xCh70n0573x7vQwK2pRmL4Z5n1DfH3JvA8YsBcNx",
+    features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
+    brand: { primary: "#ec4899", secondary: "#a78bfa", logo: "⏳" },
+  },
+  vertex: {
+    name: "VERTEX",  shortName: "vertex",  ticker: "VTX",
+    network: "Base",
+    contract: "0xV3r73x71n4nc34Z5n1DfH3JvA8YsBcNxEfRgT",
+    features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
+    brand: { primary: "#10b981", secondary: "#22d3ee", logo: "📈" },
+  },
+};
+
+const SUPPORTED_NETWORKS = ["Solana", "Ethereum", "Base"];
+
+/* hex string → "r,g,b" tuple for use inside rgba(var(--glow), ...) */
+function hexToRgbString(hex){
+  if(typeof hex !== 'string') return "139,92,246";
+  const clean = hex.replace('#','').trim();
+  if(!/^[0-9a-fA-F]{6}$/.test(clean)) return "139,92,246";
+  return [
+    parseInt(clean.slice(0,2),16),
+    parseInt(clean.slice(2,4),16),
+    parseInt(clean.slice(4,6),16),
+  ].join(',');
+}
+
+/* Update every brand-related CSS variable in one shot. Called by both
+   the pre-React FOUC script and the admin panel's Apply action. */
+function applyBrandColors(brand){
+  if(!brand || !brand.primary || !brand.secondary) return;
+  const { primary, secondary } = brand;
+  const root = document.documentElement;
+  const pRgb = hexToRgbString(primary);
+  const sRgb = hexToRgbString(secondary);
+  root.style.setProperty('--accent',       primary);
+  root.style.setProperty('--accent-hi',    primary);
+  root.style.setProperty('--accent-2',     secondary);
+  root.style.setProperty('--glow',         pRgb);
+  root.style.setProperty('--glow-2',       sRgb);
+  root.style.setProperty('--primary-soft', `rgba(${pRgb}, 0.10)`);
+  root.style.setProperty('--primary-grad',    `linear-gradient(135deg, ${primary} 0%, ${secondary} 60%, ${primary} 100%)`);
+  root.style.setProperty('--primary-grad-hi', `linear-gradient(135deg, ${secondary} 0%, ${primary} 50%, ${secondary} 100%)`);
+}
 
 /* ─────────────────────────────────────────────────────────
    ICONS — Lucide via createIcons (cached, no global rescans)
@@ -807,56 +899,59 @@ const MOCK_COLLECTIONS = [
 /* Lamports → SOL helper (1 SOL = 1_000_000_000 lamports) */
 const lamportsToSol = (n) => (typeof n === 'number' && isFinite(n)) ? n / 1e9 : null;
 
-/* Format a SOL volume number as "X.XK SOL" / "X.X SOL" */
-function fmtSolVolume(v){
+/* Format a volume number with optional currency unit */
+function fmtSolVolume(v, sym='SOL'){
   if(v == null) return '—';
-  if(v >= 1000) return (v/1000).toFixed(1) + 'K SOL';
-  if(v >= 1)    return v.toFixed(1) + ' SOL';
-  return v.toFixed(2) + ' SOL';
+  if(typeof v === 'string') return v;
+  const s = ' ' + (sym || 'SOL');
+  if(v >= 1000) return (v/1000).toFixed(1) + 'K' + s;
+  if(v >= 1)    return v.toFixed(1) + s;
+  return v.toFixed(2) + s;
 }
 
-/* Magic Eden public marketplace API — free, no key required.
-   Two-stage fetch: /v2/collections returns metadata only (no floor or
-   volume), so we follow up with /v2/collections/{symbol}/stats in
-   parallel for the top N collections. Note: ME requires limit & offset
-   to be multiples of 20, hence limit=20. */
-const MAGICEDEN_LIST_URL  = "https://api-mainnet.magiceden.dev/v2/collections?offset=0&limit=20";
-const MAGICEDEN_STATS_URL = (sym) =>
-  "https://api-mainnet.magiceden.dev/v2/collections/" + encodeURIComponent(sym) + "/stats";
+/* CoinGecko NFT API — free, no key required.
+   Returns top trending NFTs with floor prices. */
+const COINGECKO_NFT_URL = "https://api.coingecko.com/api/v3/search/trending";
 
 async function fetchNFTCollections(){
   try {
-    const res = await fetch(MAGICEDEN_LIST_URL, { headers: { accept: "application/json" } });
+    const res = await fetch(COINGECKO_NFT_URL, { headers: { accept: "application/json" } });
     if(!res.ok) throw new Error("HTTP "+res.status);
     const data = await res.json();
-    if(!Array.isArray(data)) throw new Error("unexpected payload");
+    if(!data.nfts || !Array.isArray(data.nfts)) throw new Error("unexpected payload");
 
     // Keep top 8 viable rows (need at least name + image)
-    const viable = data
-      .filter(c => c && c.symbol && c.name && c.image)
+    const viable = data.nfts
+      .filter(c => c && c.id && c.name && c.thumb)
       .slice(0, 8);
 
-    // Parallel-fetch /stats for each — gives us floorPrice + volumeAll
-    const stats = await Promise.all(viable.map(async (c) => {
+    return viable.map(c => {
+      let floor = null;
+      let vol = null;
       try {
-        const sr = await fetch(MAGICEDEN_STATS_URL(c.symbol), { headers: { accept: "application/json" } });
-        if(!sr.ok) return null;
-        return await sr.json();
-      } catch { return null; }
-    }));
+        if(c.data && typeof c.data.floor_price === 'string') {
+          const match = c.data.floor_price.match(/[\d.]+/);
+          if (match) floor = parseFloat(match[0]);
+        }
+        if(c.data && typeof c.data.h24_volume === 'string') {
+          const match = c.data.h24_volume.match(/[\d.]+/);
+          if (match) vol = parseFloat(match[0]);
+        }
+      } catch(e) {}
+      
+      const currency = c.native_currency_symbol ? c.native_currency_symbol.toUpperCase() : 'ETH';
 
-    return viable.map((c, i) => {
-      const s = stats[i] || {};
       return {
-        id:     c.symbol,
+        id:     c.id,
         name:   c.name,
-        image:  c.image,
-        floor:  typeof s.floorPrice === 'number' ? lamportsToSol(s.floorPrice) : null,
-        volume: typeof s.volumeAll  === 'number' ? lamportsToSol(s.volumeAll)  : null,
+        image:  c.thumb,
+        floor:  floor !== null ? floor : (typeof c.floor_price_in_native_currency === 'number' ? c.floor_price_in_native_currency : null),
+        volume: vol,
+        currency: currency
       };
     });
   } catch (e) {
-    console.warn("[NEXUS] Magic Eden fetch failed — using fallback:", e?.message || e);
+    console.warn("[NEXUS] CoinGecko NFT fetch failed — using fallback:", e?.message || e);
     return null;
   }
 }
@@ -877,7 +972,48 @@ function AppProvider({ children }){
   const [activeTxModal, setActiveTxModal] = useState(null);
   const [activeNFT, setActiveNFT] = useState(null);
   const [activeStakeModal, setActiveStakeModal] = useState(null);
+  const [showAdmin, setShowAdmin] = useState(false);
   const theme = useTheme();
+
+  /* Live brand config — initial value is read from localStorage
+     (if any) and merged on top of PROJECT_CONFIG defaults. Mutating
+     PROJECT_CONFIG in place keeps direct reads (`PROJECT_CONFIG.name`,
+     etc.) elsewhere in sync; the state update triggers a context
+     re-render so all useApp() consumers reflect the change. */
+  const [config, setConfigState] = useState(()=> {
+    try {
+      const raw = localStorage.getItem('nexus-config');
+      if(raw){
+        const parsed = JSON.parse(raw);
+        Object.assign(PROJECT_CONFIG, parsed);
+        if(parsed.brand) Object.assign(PROJECT_CONFIG.brand, parsed.brand);
+        return { ...PROJECT_CONFIG };
+      }
+    } catch(_){}
+    return { ...PROJECT_CONFIG };
+  });
+
+  const setConfig = useCallback((next) => {
+    // Merge into PROJECT_CONFIG so non-React reads stay current
+    Object.assign(PROJECT_CONFIG, next);
+    if(next.features) Object.assign(PROJECT_CONFIG.features, next.features);
+    if(next.brand)    Object.assign(PROJECT_CONFIG.brand,    next.brand);
+    // Apply colors to CSS vars
+    applyBrandColors(PROJECT_CONFIG.brand);
+    // Persist
+    try { localStorage.setItem('nexus-config', JSON.stringify(PROJECT_CONFIG)); } catch(_){}
+    // Trigger re-render of all useApp() consumers
+    setConfigState({ ...PROJECT_CONFIG });
+  }, []);
+
+  const resetConfig = useCallback(() => {
+    // Wipe storage and reload PROJECT_CONFIG from the NEXUS preset
+    try { localStorage.removeItem('nexus-config'); } catch(_){}
+    Object.keys(PROJECT_CONFIG).forEach(k => delete PROJECT_CONFIG[k]);
+    Object.assign(PROJECT_CONFIG, JSON.parse(JSON.stringify(CONFIG_PRESETS.nexus)));
+    applyBrandColors(PROJECT_CONFIG.brand);
+    setConfigState({ ...PROJECT_CONFIG });
+  }, []);
 
   /* Live market data — initial value = MOCK_TOKENS so the UI is never blank.
      Refreshes from CoinGecko every 30s; on failure we keep the last good
@@ -949,6 +1085,12 @@ function AppProvider({ children }){
 
   useEffect(()=>{
     const h = (e) => {
+      // Ctrl/Cmd + Shift + K → admin panel (checked BEFORE the bare Ctrl+K branch)
+      if((e.metaKey||e.ctrlKey) && e.shiftKey && e.key.toLowerCase()==='k'){
+        e.preventDefault();
+        setShowAdmin(s => !s);
+        return;
+      }
       if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); setShowSearch(s=>!s); }
       if(e.key === '/' && !e.metaKey && !e.ctrlKey){ e.preventDefault(); setShowSearch(true); }
@@ -958,9 +1100,9 @@ function AppProvider({ children }){
   }, []);
 
   useEffect(()=>{
-    const anyOpen = showSidebar || showWallet || showSearch || showFilters || activeTxModal || activeNFT || activeStakeModal;
+    const anyOpen = showSidebar || showWallet || showSearch || showFilters || showAdmin || activeTxModal || activeNFT || activeStakeModal;
     document.body.style.overflow = anyOpen ? 'hidden' : '';
-  }, [showSidebar, showWallet, showSearch, showFilters, activeTxModal, activeNFT, activeStakeModal]);
+  }, [showSidebar, showWallet, showSearch, showFilters, showAdmin, activeTxModal, activeNFT, activeStakeModal]);
 
   return (
     <AppCtx.Provider value={{
@@ -978,6 +1120,8 @@ function AppProvider({ children }){
       theme,
       tokens, marketStatus,
       collections, collectionsStatus,
+      showAdmin, setShowAdmin,
+      config, setConfig, resetConfig,
     }}>{children}</AppCtx.Provider>
   );
 }
@@ -1102,9 +1246,36 @@ const NAV = NAV_GROUPS.flatMap(g => g.items);
 
 let _nxLogoCounter = 0;
 function NexusLogo({ size=28 }){
-  /* Unique IDs per instance — fixes duplicate-id bug where defs from the
-     first instance bled into subsequent instances and broke gradients. */
+  /* If the admin panel set a custom logo (URL or emoji), honor that;
+     otherwise render the default geometric N. Gradient stops use CSS
+     vars so brand color changes via the admin panel propagate live. */
+  const app = useContext(AppCtx);
+  const customLogo = app?.config?.brand?.logo || '';
   const uid = useMemo(()=> 'nx'+(++_nxLogoCounter), []);
+
+  if(customLogo){
+    const isUrl = /^(https?:|\/|data:)/i.test(customLogo);
+    if(isUrl){
+      return (
+        <img src={customLogo} alt="" width={size} height={size}
+          style={{display:'block', borderRadius:8, objectFit:'cover', flexShrink:0,
+                  background:'var(--primary-soft)'}}
+          onError={(e)=>{ e.currentTarget.style.display='none'; }}
+        />
+      );
+    }
+    // Emoji / short text → render in a brand-gradient pill
+    return (
+      <span style={{
+        display:'inline-flex', alignItems:'center', justifyContent:'center',
+        width: size, height: size, borderRadius: 8, lineHeight: 1, flexShrink: 0,
+        background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
+        fontSize: Math.round(size * 0.55),
+        boxShadow: '0 4px 14px -4px rgba(var(--glow), 0.45), inset 0 1px 0 rgba(255,255,255,0.20)',
+      }}>{customLogo}</span>
+    );
+  }
+
   const idMain   = uid+'-main';
   const idBevel  = uid+'-bevel';
   const idShadow = uid+'-shadow';
@@ -1112,32 +1283,28 @@ function NexusLogo({ size=28 }){
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" style={{display:'block', flexShrink:0}}>
       <defs>
         <linearGradient id={idMain} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%"   stopColor="#c4b5fd"/>
-          <stop offset="35%"  stopColor="#8b5cf6"/>
-          <stop offset="70%"  stopColor="#6366f1"/>
-          <stop offset="100%" stopColor="#22d3ee"/>
+          <stop offset="0%"   style={{stopColor:'var(--accent-hi)'}}/>
+          <stop offset="55%"  style={{stopColor:'var(--accent)'}}/>
+          <stop offset="100%" style={{stopColor:'var(--accent-2)'}}/>
         </linearGradient>
         <linearGradient id={idBevel} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%"   stopColor="rgba(255,255,255,0.55)"/>
-          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+          <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.55"/>
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0"/>
         </linearGradient>
         <linearGradient id={idShadow} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%"   stopColor="#4c1d95"/>
-          <stop offset="100%" stopColor="#0e7490"/>
+          <stop offset="0%"   style={{stopColor:'var(--accent)'}} stopOpacity="0.6"/>
+          <stop offset="100%" style={{stopColor:'var(--accent-2)'}} stopOpacity="0.5"/>
         </linearGradient>
       </defs>
-      {/* Depth shadow (offset down-right) */}
       <path
         d="M 9 7.5 L 15 7.5 L 26.5 23.5 L 26.5 7.5 L 32.5 7.5 L 32.5 33.5 L 26.5 33.5 L 15 17.5 L 15 33.5 L 9 33.5 Z"
-        fill={`url(#${idShadow})`} opacity="0.55"
+        fill={`url(#${idShadow})`} opacity="0.6"
       />
-      {/* Main N */}
       <path
         d="M 7.5 6 L 13.5 6 L 25 22 L 25 6 L 31 6 L 31 32 L 25 32 L 13.5 16 L 13.5 32 L 7.5 32 Z"
         fill={`url(#${idMain})`}
         stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" strokeLinejoin="round"
       />
-      {/* Top bevel highlight */}
       <path
         d="M 7.5 6 L 13.5 6 L 25 22 L 25 6 L 31 6 L 31 9 L 27 9 L 14 9 L 10.5 9 L 7.5 9 Z"
         fill={`url(#${idBevel})`} opacity="0.7"
@@ -1147,7 +1314,7 @@ function NexusLogo({ size=28 }){
 }
 
 function Sidebar(){
-  const { showSidebar, setShowSidebar, sidebarCollapsed, setSidebarCollapsed } = useApp();
+  const { showSidebar, setShowSidebar, sidebarCollapsed, setSidebarCollapsed, config } = useApp();
   const loc = useLocation();
   useEffect(()=>{ setShowSidebar(false); }, [loc.pathname]);
 
@@ -1156,6 +1323,14 @@ function Sidebar(){
     items: g.items.filter(n => !n.flag || PROJECT_CONFIG.features[n.flag]),
   })).filter(g => g.items.length);
 
+  // Derive the wordmark from config.name: first word = top line,
+  // remaining words = bottom tagline. Single-word names hide the
+  // bottom line entirely. "NEXUS Protocol" → "NEXUS" / "PROTOCOL"
+  const nameParts = String(config?.name || PROJECT_CONFIG.name || '')
+    .trim().split(/\s+/).filter(Boolean);
+  const markTop = (nameParts[0] || 'NEXUS').toUpperCase();
+  const markBot = nameParts.slice(1).join(' ').toUpperCase();
+
   const Inner = ({ collapsed, isMobile }) => (
     <div className={"relative flex flex-col h-full "+(collapsed?"px-2":"px-3")+" py-4"}>
       <div className={"flex items-center "+(collapsed?"justify-center":"justify-between")+" mb-6 px-1"}>
@@ -1163,8 +1338,8 @@ function Sidebar(){
           <NexusLogo size={28}/>
           {!collapsed && (
             <div className="leading-none">
-              <div className="font-semibold text-[14px] tracking-tight">NEXUS</div>
-              <div className="text-[9px] tracking-[0.22em] text-ink-500 font-medium mt-1">PROTOCOL</div>
+              <div className="font-semibold text-[14px] tracking-tight">{markTop}</div>
+              {markBot && <div className="text-[9px] tracking-[0.22em] text-ink-500 font-medium mt-1">{markBot}</div>}
             </div>
           )}
         </Link>
@@ -2346,11 +2521,11 @@ function FeaturedCollections(){
                   <div className="grid grid-cols-2 gap-2 mt-2 text-[11px]">
                     <div>
                       <div className="text-ink-500">Floor</div>
-                      <div className="font-mono">{c.floor != null ? c.floor.toFixed(2) + ' SOL' : '—'}</div>
+                      <div className="font-mono">{c.floor != null ? (c.floor < 0.1 ? c.floor.toFixed(4) : c.floor.toFixed(2)) + ' ' + (c.currency || 'SOL') : '—'}</div>
                     </div>
                     <div>
                       <div className="text-ink-500">Volume</div>
-                      <div className="font-mono">{fmtSolVolume(c.volume)}</div>
+                      <div className="font-mono">{fmtSolVolume(c.volume, c.currency)}</div>
                     </div>
                   </div>
                 </div>
@@ -2913,6 +3088,255 @@ function StakingPage(){
         </div>
       </div>
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   ADMIN PANEL — Ctrl+Shift+K
+   Hidden rebranding console. Lets you instantly change name,
+   ticker, network, primary/secondary color, and logo (emoji
+   or URL). Supports 3 presets, Reset, Export and Import.
+   ───────────────────────────────────────────────────────── */
+function AdminPanel(){
+  const { showAdmin, setShowAdmin, config, setConfig, resetConfig, pushToast } = useApp();
+  const [draft, setDraft] = useState(()=> JSON.parse(JSON.stringify(config)));
+  const fileRef = useRef(null);
+  const livePreviewRef = useRef(false);
+
+  // Whenever the panel reopens, reseed the draft from the current config
+  useEffect(()=>{
+    if(showAdmin) setDraft(JSON.parse(JSON.stringify(config)));
+  }, [showAdmin]);
+
+  // Live-preview brand colors as the user picks them, without committing
+  useEffect(()=>{
+    if(!showAdmin) return;
+    livePreviewRef.current = true;
+    applyBrandColors(draft.brand);
+    return () => {
+      // If the user closes WITHOUT applying, revert the CSS vars to the
+      // currently-committed config so the preview doesn't leak.
+      if(livePreviewRef.current){
+        applyBrandColors(config.brand);
+        livePreviewRef.current = false;
+      }
+    };
+  }, [draft.brand?.primary, draft.brand?.secondary, showAdmin]);
+
+  const update = (path, value) => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      const keys = path.split('.');
+      let cur = next;
+      for(let i=0; i<keys.length-1; i++){
+        cur[keys[i]] = cur[keys[i]] ?? {};
+        cur = cur[keys[i]];
+      }
+      cur[keys[keys.length-1]] = value;
+      return next;
+    });
+  };
+
+  const apply = () => {
+    livePreviewRef.current = false; // already applied below
+    setConfig(draft);
+    pushToast({ kind:'success', title:'Rebrand applied', body:`Now showing as ${draft.name}` });
+    setShowAdmin(false);
+  };
+
+  const reset = () => {
+    resetConfig();
+    setDraft(JSON.parse(JSON.stringify(CONFIG_PRESETS.nexus)));
+    pushToast({ kind:'info', title:'Reset to NEXUS' });
+  };
+
+  const loadPreset = (key) => {
+    const preset = CONFIG_PRESETS[key];
+    if(!preset) return;
+    setDraft(JSON.parse(JSON.stringify(preset)));
+  };
+
+  const exportConfig = () => {
+    try {
+      const blob = new Blob([JSON.stringify(draft, null, 2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(draft.shortName||'config').toLowerCase()}-config.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      pushToast({ kind:'success', title:'Config exported' });
+    } catch (e) {
+      pushToast({ kind:'error', title:'Export failed', body: e.message });
+    }
+  };
+
+  const importConfig = (file) => {
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        if(typeof parsed !== 'object' || !parsed) throw new Error('Not a JSON object');
+        // Merge against the NEXUS preset so missing fields fall back sensibly
+        const merged = JSON.parse(JSON.stringify(CONFIG_PRESETS.nexus));
+        Object.assign(merged, parsed);
+        if(parsed.features) merged.features = { ...merged.features, ...parsed.features };
+        if(parsed.brand)    merged.brand    = { ...merged.brand,    ...parsed.brand };
+        setDraft(merged);
+        pushToast({ kind:'success', title:'Config imported', body: 'Click Apply to commit' });
+      } catch (e) {
+        pushToast({ kind:'error', title:'Invalid JSON', body: e.message });
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  if(!showAdmin) return null;
+
+  const PresetCard = ({ id, label, sub, primary, secondary }) => {
+    const active = draft.shortName === CONFIG_PRESETS[id].shortName;
+    return (
+      <button onClick={()=>loadPreset(id)}
+        className={"text-left rounded-xl2 border p-3 transition-all "+(active?'border-line-2':'border-line hover:border-line-2')}
+        style={{
+          background: active ? `linear-gradient(135deg, ${primary}22, ${secondary}22)` : 'var(--surface)',
+        }}>
+        <div className="flex items-center justify-between">
+          <div className="text-[13px] font-semibold">{label}</div>
+          <div className="flex -space-x-1">
+            <span className="w-4 h-4 rounded-full ring-2 ring-[var(--surface)]" style={{background:primary}}/>
+            <span className="w-4 h-4 rounded-full ring-2 ring-[var(--surface)]" style={{background:secondary}}/>
+          </div>
+        </div>
+        <div className="text-[11px] text-ink-500 mt-1">{sub}</div>
+      </button>
+    );
+  };
+
+  return (
+    <Modal open onClose={()=>setShowAdmin(false)} title="Admin · Rebrand console" size="lg">
+      <div className="space-y-5">
+        {/* Presets */}
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Presets</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <PresetCard id="nexus"   label="NEXUS"   sub="Purple / Cyan" primary="#8b5cf6" secondary="#22d3ee"/>
+            <PresetCard id="chronos" label="CHRONOS" sub="Pink / Violet" primary="#ec4899" secondary="#a78bfa"/>
+            <PresetCard id="vertex"  label="VERTEX"  sub="Green / Cyan"  primary="#10b981" secondary="#22d3ee"/>
+          </div>
+        </div>
+
+        {/* Identity fields */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-[11px] uppercase tracking-wider text-ink-500">Project name</label>
+            <input className="input mt-1" value={draft.name||''}
+              onChange={e=>update('name', e.target.value)} placeholder="NEXUS Protocol"/>
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-wider text-ink-500">Ticker symbol</label>
+            <input className="input mt-1 font-mono uppercase" value={draft.ticker||''}
+              onChange={e=>update('ticker', e.target.value.toUpperCase().slice(0,8))} placeholder="NXS"/>
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-wider text-ink-500">Network</label>
+            <select className="input mt-1" value={draft.network||'Solana'}
+              onChange={e=>update('network', e.target.value)}>
+              {SUPPORTED_NETWORKS.map(n => <option key={n}>{n}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-wider text-ink-500">Short slug</label>
+            <input className="input mt-1 font-mono" value={draft.shortName||''}
+              onChange={e=>update('shortName', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,''))} placeholder="nexus"/>
+          </div>
+        </div>
+
+        {/* Brand colors + logo */}
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Brand</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-center gap-3">
+              <input type="color" value={draft.brand?.primary || '#8b5cf6'}
+                onChange={e=>update('brand.primary', e.target.value)}
+                className="w-12 h-10 rounded-lg border border-line bg-transparent cursor-pointer flex-shrink-0"
+                title="Primary color"/>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px]">Primary</div>
+                <input className="input mt-1 font-mono text-[12px]" value={draft.brand?.primary || ''}
+                  onChange={e=>update('brand.primary', e.target.value)} placeholder="#8b5cf6"/>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <input type="color" value={draft.brand?.secondary || '#22d3ee'}
+                onChange={e=>update('brand.secondary', e.target.value)}
+                className="w-12 h-10 rounded-lg border border-line bg-transparent cursor-pointer flex-shrink-0"
+                title="Secondary color"/>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px]">Secondary</div>
+                <input className="input mt-1 font-mono text-[12px]" value={draft.brand?.secondary || ''}
+                  onChange={e=>update('brand.secondary', e.target.value)} placeholder="#22d3ee"/>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="text-[12px]">Logo override</label>
+            <div className="text-[11px] text-ink-500 mb-1">Emoji (⏳, 📈, etc.) or full image URL. Leave empty for the default N mark.</div>
+            <div className="flex items-center gap-2">
+              <input className="input flex-1" value={draft.brand?.logo || ''}
+                onChange={e=>update('brand.logo', e.target.value)}
+                placeholder="📈 or https://…"/>
+              <div className="w-12 h-12 rounded-xl2 bg-surface border border-line flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {(()=>{
+                  const l = draft.brand?.logo || '';
+                  if(!l) return <span className="text-ink-500 text-[10px]">N</span>;
+                  if(/^(https?:|\/|data:)/i.test(l))
+                    return <img src={l} alt="" className="w-full h-full object-cover" onError={e=>{e.currentTarget.style.display='none';}}/>;
+                  return (
+                    <span style={{
+                      display:'inline-flex', alignItems:'center', justifyContent:'center',
+                      width:'100%', height:'100%',
+                      background:'linear-gradient(135deg, var(--accent), var(--accent-2))',
+                      fontSize:24, color:'#fff',
+                    }}>{l}</span>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="border-t border-line pt-4 flex flex-wrap items-center gap-2 justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={exportConfig} className="btn btn-secondary text-[12.5px]">
+              <Icon name="download" size={13}/> Export
+            </button>
+            <button onClick={()=>fileRef.current?.click()} className="btn btn-secondary text-[12.5px]">
+              <Icon name="upload" size={13}/> Import
+            </button>
+            <input ref={fileRef} type="file" accept="application/json,.json" className="hidden"
+              onChange={e=>{ importConfig(e.target.files?.[0]); e.target.value=''; }}/>
+            <button onClick={reset} className="btn btn-secondary text-[12.5px] text-neg">
+              <Icon name="rotate-ccw" size={13}/> Reset to NEXUS
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={()=>setShowAdmin(false)} className="btn btn-ghost text-[12.5px]">Cancel</button>
+            <button onClick={apply} className="btn btn-primary">
+              <Icon name="check" size={14}/> Apply
+            </button>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-ink-500 text-center pt-2 border-t border-line">
+          Shortcut: <kbd className="px-1.5 py-0.5 rounded border border-line font-mono text-[10px]">Ctrl + Shift + K</kbd>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -3813,6 +4237,7 @@ function Shell(){
       <NFTDetailModal/>
       <StakeModal/>
       <TxModal/>
+      <AdminPanel/>
       <ToastHost/>
     </div>
   );
