@@ -615,16 +615,52 @@ function genCandles(n, start, drift, vol, seed){
   return out;
 }
 
-const TOKENS = [
-  { symbol: PROJECT_CONFIG.ticker, name: PROJECT_CONFIG.name,    price: 2.34,   change: 12.40, mcap: 234_000_000, vol: 18_400_000, holders: 24_812 },
-  { symbol: "USDC",                 name: "USD Coin",            price: 1.00,   change:  0.01, mcap: 32_000_000_000, vol: 4_100_000_000, holders: 1_200_000 },
-  { symbol: "SOL",                  name: "Solana",              price: 184.21, change:  3.20, mcap: 86_000_000_000, vol: 2_400_000_000, holders: 1_900_000 },
-  { symbol: "JUP",                  name: "Jupiter",             price: 0.812,  change:  4.70, mcap: 1_120_000_000, vol: 142_000_000, holders: 412_300 },
-  { symbol: "JTO",                  name: "Jito",                price: 3.41,   change: -2.10, mcap: 388_000_000, vol: 64_000_000, holders: 144_200 },
-  { symbol: "PYTH",                 name: "Pyth Network",        price: 0.412,  change: -8.90, mcap: 1_490_000_000, vol: 88_000_000, holders: 88_400 },
-  { symbol: "RAY",                  name: "Raydium",             price: 2.04,   change:  1.90, mcap: 588_000_000, vol: 24_000_000, holders: 102_800 },
-  { symbol: "BONK",                 name: "Bonk",                price: 0.000022, change: 22.40, mcap: 1_710_000_000, vol: 240_000_000, holders: 612_400 },
+/* ─────────────────────────────────────────────────────────
+   MOCK_TOKENS — used as initial state and offline fallback.
+   First entry is the synthetic project token (NXS) and is
+   ALWAYS kept at tokens[0] even when live data is loaded,
+   so dashboard branding (price chart, "Trade NXS" CTA, etc.)
+   keeps working regardless of network state.
+   ───────────────────────────────────────────────────────── */
+const MOCK_TOKENS = [
+  { id: "nexus-protocol",  symbol: PROJECT_CONFIG.ticker, name: PROJECT_CONFIG.name,    price: 2.34,   change: 12.40, mcap: 234_000_000, vol: 18_400_000, holders: 24_812, sparkline: [] },
+  { id: "usd-coin",        symbol: "USDC",                 name: "USD Coin",            price: 1.00,   change:  0.01, mcap: 32_000_000_000, vol: 4_100_000_000, holders: 1_200_000, sparkline: [] },
+  { id: "solana",          symbol: "SOL",                  name: "Solana",              price: 184.21, change:  3.20, mcap: 86_000_000_000, vol: 2_400_000_000, holders: 1_900_000, sparkline: [] },
+  { id: "jupiter-exchange-solana", symbol: "JUP",          name: "Jupiter",             price: 0.812,  change:  4.70, mcap: 1_120_000_000, vol: 142_000_000, holders: 412_300, sparkline: [] },
+  { id: "jito-governance-token", symbol: "JTO",            name: "Jito",                price: 3.41,   change: -2.10, mcap: 388_000_000, vol: 64_000_000, holders: 144_200, sparkline: [] },
+  { id: "pyth-network",    symbol: "PYTH",                 name: "Pyth Network",        price: 0.412,  change: -8.90, mcap: 1_490_000_000, vol: 88_000_000, holders: 88_400, sparkline: [] },
+  { id: "raydium",         symbol: "RAY",                  name: "Raydium",             price: 2.04,   change:  1.90, mcap: 588_000_000, vol: 24_000_000, holders: 102_800, sparkline: [] },
+  { id: "bonk",            symbol: "BONK",                 name: "Bonk",                price: 0.000022, change: 22.40, mcap: 1_710_000_000, vol: 240_000_000, holders: 612_400, sparkline: [] },
 ];
+
+/* CoinGecko public markets endpoint — free tier, no key required.
+   Returns top market-cap coins with 7d sparkline and 24h % change. */
+const COINGECKO_URL = "https://api.coingecko.com/api/v3/coins/markets"
+  + "?vs_currency=usd&order=market_cap_desc&per_page=50&sparkline=true&price_change_percentage=24h";
+
+async function fetchMarketData(){
+  try {
+    const res = await fetch(COINGECKO_URL, { headers: { accept: "application/json" } });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data = await res.json();
+    if(!Array.isArray(data) || data.length === 0) throw new Error("empty payload");
+    return data.map(c => ({
+      id:        c.id,
+      symbol:    (c.symbol || "").toUpperCase(),
+      name:      c.name,
+      price:     Number(c.current_price) || 0,
+      change:    Number(c.price_change_percentage_24h) || 0,
+      mcap:      Number(c.market_cap) || 0,
+      vol:       Number(c.total_volume) || 0,
+      holders:   0, // not exposed on free tier
+      image:     c.image,
+      sparkline: Array.isArray(c.sparkline_in_7d?.price) ? c.sparkline_in_7d.price : [],
+    }));
+  } catch (e) {
+    console.warn("[NEXUS] CoinGecko fetch failed — using fallback:", e?.message || e);
+    return null;
+  }
+}
 
 const NFT_NAMES = [
   "Once a Dreamer","Sacred Memory","Echoes of Twilight","Borrowed Light",
@@ -710,7 +746,7 @@ const TX_TYPES = ["Swap","Transfer","Stake","Unstake","Claim","Mint","List","Bid
 function genTx(i){
   const r = rng(i*31+7);
   const type = TX_TYPES[Math.floor(r()*TX_TYPES.length)];
-  const tokenA = TOKENS[Math.floor(r()*TOKENS.length)];
+  const tokenA = MOCK_TOKENS[Math.floor(r()*MOCK_TOKENS.length)];
   const amt = parseFloat((r()*5000+5).toFixed(2));
   return {
     id: i, type, tokenA, amount: amt, usd: amt * tokenA.price,
@@ -781,6 +817,38 @@ function AppProvider({ children }){
   const [activeStakeModal, setActiveStakeModal] = useState(null);
   const theme = useTheme();
 
+  /* Live market data — initial value = MOCK_TOKENS so the UI is never blank.
+     Refreshes from CoinGecko every 30s; on failure we keep the last good
+     value and flag `source: 'stale'` so the UI can surface it. */
+  const [tokens, setTokens] = useState(MOCK_TOKENS);
+  const [marketStatus, setMarketStatus] = useState({ source: 'mock', updatedAt: null, error: null });
+
+  useEffect(()=>{
+    let cancelled = false;
+    const sync = async () => {
+      const real = await fetchMarketData();
+      if(cancelled) return;
+      if(real){
+        // Always keep the synthetic project token at index 0
+        const nxs = MOCK_TOKENS[0];
+        // De-dupe by symbol just in case (CoinGecko has no NXS so this is mostly defensive)
+        const filtered = real.filter(t => t.symbol !== nxs.symbol);
+        setTokens([nxs, ...filtered]);
+        setMarketStatus({ source: 'live', updatedAt: Date.now(), error: null });
+      } else {
+        // Keep previous successful data if we had it; otherwise stay on mock
+        setMarketStatus(s => ({
+          ...s,
+          source: s.source === 'live' ? 'stale' : 'mock',
+          error: 'CoinGecko unavailable',
+        }));
+      }
+    };
+    sync();
+    const id = setInterval(sync, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
   const pushToast = useCallback((t) => {
     const id = Math.random().toString(36).slice(2);
     setToasts(p => [...p, { id, ...t }]);
@@ -816,6 +884,7 @@ function AppProvider({ children }){
       activeNFT, setActiveNFT,
       activeStakeModal, setActiveStakeModal,
       theme,
+      tokens, marketStatus,
     }}>{children}</AppCtx.Provider>
   );
 }
@@ -1340,13 +1409,13 @@ function WalletModal(){
    SEARCH (⌘K)
    ───────────────────────────────────────────────────────── */
 function SearchModal(){
-  const { showSearch, setShowSearch } = useApp();
+  const { showSearch, setShowSearch, tokens } = useApp();
   const [q, setQ] = useState("");
   const ref = useRef(null);
   useEffect(()=>{ if(showSearch) setTimeout(()=> ref.current?.focus(), 30); }, [showSearch]);
   if(!showSearch) return null;
   const lower = q.toLowerCase();
-  const tokenHits = TOKENS.filter(t=>t.symbol.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)).slice(0,5);
+  const tokenHits = tokens.filter(t=>t.symbol.toLowerCase().includes(lower) || t.name.toLowerCase().includes(lower)).slice(0,5);
   const navHits = NAV.filter(n=>n.label.toLowerCase().includes(lower)).slice(0,4);
 
   return (
@@ -1620,12 +1689,19 @@ function PortfolioCard(){
 }
 
 function TopMoversCard(){
+  const { tokens } = useApp();
   const movers = useMemo(()=> {
-    return TOKENS.map((t,i) => {
-      const data = Array.from({length: 24}, (_,k)=> ({ v: Math.max(0.0001, t.price * (1 + (Math.sin(k*0.5+i)+Math.random()*0.6-0.3)*0.05)) }));
+    return tokens.map((t, i) => {
+      // Prefer the real 7-day sparkline from CoinGecko; fall back to a
+      // synthesized one (e.g. for the synthetic NXS token at index 0).
+      const data = (t.sparkline && t.sparkline.length > 1)
+        ? t.sparkline.map(v => ({ v }))
+        : Array.from({length: 24}, (_, k) => ({
+            v: Math.max(0.0001, t.price * (1 + (Math.sin(k*0.5+i)+Math.random()*0.6-0.3)*0.05))
+          }));
       return { ...t, spark: data };
-    }).sort((a,b)=> b.change-a.change);
-  }, []);
+    }).sort((a,b) => (b.change||0) - (a.change||0));
+  }, [tokens]);
   return (
     <div className="surface">
       <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-line">
@@ -1839,17 +1915,17 @@ function RecentActivityCard(){
 }
 
 function SwapWidget(){
-  const { wallet, setShowWallet, pushToast } = useApp();
+  const { wallet, setShowWallet, pushToast, tokens } = useApp();
   const [tab, setTab] = useState("swap");
   const [from, setFrom] = useState("USDC");
   const [to, setTo] = useState(PROJECT_CONFIG.ticker);
   const [amount, setAmount] = useState(1000);
-  const fromTok = TOKENS.find(t=>t.symbol===from) || TOKENS[1];
-  const toTok = TOKENS.find(t=>t.symbol===to) || TOKENS[0];
-  const fromUsd = amount * fromTok.price;
-  const rate = fromTok.price / toTok.price;
+  const fromTok = tokens.find(t=>t.symbol===from) || tokens[1] || tokens[0];
+  const toTok   = tokens.find(t=>t.symbol===to)   || tokens[0];
+  const fromUsd = amount * (fromTok?.price || 0);
+  const rate = (fromTok?.price || 0) / (toTok?.price || 1);
   const youGet = amount * rate * 0.997;
-  const toUsd = youGet * toTok.price;
+  const toUsd = youGet * (toTok?.price || 0);
   const flip = ()=>{ const a=from; setFrom(to); setTo(a); };
   const handle = ()=>{
     if(!wallet){ setShowWallet(true); return; }
@@ -1857,10 +1933,10 @@ function SwapWidget(){
   };
   const TokenSelect = ({value, onChange, side}) => (
     <button onClick={()=>{ /* simple cycle for demo */
-      const i = TOKENS.findIndex(t=>t.symbol===value);
-      let next = TOKENS[(i+1) % TOKENS.length].symbol;
-      if(next === (side==='from'?to:from)) next = TOKENS[(i+2) % TOKENS.length].symbol;
-      onChange(next);
+      const i = tokens.findIndex(t=>t.symbol===value);
+      let next = tokens[(i+1) % tokens.length]?.symbol;
+      if(next === (side==='from'?to:from)) next = tokens[(i+2) % tokens.length]?.symbol;
+      if(next) onChange(next);
     }} className="flex items-center gap-2 pl-1 pr-2.5 h-9 rounded-full border border-line-2 bg-bg hover:bg-hover transition-colors">
       <TokenMark symbol={value} size={22}/>
       <span className="text-[13px] font-medium">{value}</span>
@@ -1931,17 +2007,47 @@ function SwapWidget(){
   );
 }
 
+function MarketDataChip(){
+  const { marketStatus } = useApp();
+  const { source, updatedAt, error } = marketStatus || {};
+  const ago = updatedAt ? Math.floor((Date.now()-updatedAt)/1000) : null;
+  const [, force] = useState(0);
+  useEffect(()=>{ const t = setInterval(()=> force(n=>n+1), 5000); return ()=> clearInterval(t); }, []);
+  if(source === 'live'){
+    return (
+      <span className="chip chip-pos" title={"Live from CoinGecko · refreshed "+(ago!=null?ago+"s ago":"just now")}>
+        <span className="dot"/> Live · CoinGecko
+      </span>
+    );
+  }
+  if(source === 'stale'){
+    return (
+      <span className="chip chip-neg" title={error || 'Live feed paused'}>
+        <Icon name="wifi-off" size={11}/> Reconnecting…
+      </span>
+    );
+  }
+  return (
+    <span className="chip" title={error || 'Using sample data — live feed unavailable'}>
+      <Icon name="database" size={11}/> Sample data
+    </span>
+  );
+}
+
 function MarketsPage(){
-  const { setActiveTxModal } = useApp();
+  const { setActiveTxModal, tokens } = useApp();
   return (
     <div className="space-y-4 sm:space-y-5">
-      <div className="flex items-center justify-end gap-2">
-        <button onClick={()=>setActiveTxModal({ type:'Buy', token: TOKENS[0], amount: 1000 })} className="btn btn-primary">
-          <Icon name="arrow-down-up" size={14}/> Trade
-        </button>
-        <button className="btn btn-secondary">
-          <Icon name="arrow-down-to-line" size={14}/> Deposit
-        </button>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <MarketDataChip/>
+        <div className="flex items-center gap-2">
+          <button onClick={()=>setActiveTxModal({ type:'Buy', token: tokens[0], amount: 1000 })} className="btn btn-primary">
+            <Icon name="arrow-down-up" size={14}/> Trade
+          </button>
+          <button className="btn btn-secondary">
+            <Icon name="arrow-down-to-line" size={14}/> Deposit
+          </button>
+        </div>
       </div>
 
       <StatGrid/>
