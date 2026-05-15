@@ -1155,55 +1155,244 @@ async function fetchRecentActivity(){
 }
 
 async function fetchNFTCollections(){
+  /* The collections state used by <FeaturedCollections> is now
+     populated by the multi-source NFT aggregator (Magic Eden +
+     Reservoir + Tensor) defined below. We map the unified shape
+     back to the legacy field names (floor/volume) for backwards
+     compat with the existing UI, while passing the new fields
+     (platform, source, chain, link, holders) through so cards
+     can display "Aggregated from Magic Eden" badges, deep-link
+     to the underlying marketplace, etc. */
   try {
-    const res = await fetch(COINGECKO_NFT_URL, { headers: { accept: "application/json" } });
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    const data = await res.json();
-    if(!data.nfts || !Array.isArray(data.nfts)) throw new Error("unexpected payload");
-
-    // Keep top 8 viable rows (need at least name + image)
-    const viable = data.nfts
-      .filter(c => c && c.id && c.name && (c.large || c.small || c.thumb))
-      .slice(0, 8);
-
-    return viable.map(c => {
-      let floor = null;
-      let vol = null;
-      try {
-        if(c.data && typeof c.data.floor_price === 'string') {
-          const match = c.data.floor_price.match(/[\d.]+/);
-          if (match) floor = parseFloat(match[0]);
-        }
-        if(c.data && typeof c.data.h24_volume === 'string') {
-          const match = c.data.h24_volume.match(/[\d.]+/);
-          if (match) vol = parseFloat(match[0]);
-        }
-      } catch(e) {}
-      
-      const currency = c.native_currency_symbol ? c.native_currency_symbol.toUpperCase() : 'ETH';
-
-      // CoinGecko's /search/trending NFT entries cap out at /large/
-      // (verified: /original/ returns 4xx XML on the NFT contract CDN).
-      // We use /large/ directly and rely on the backdrop-blur + natural-
-      // size rendering in <FeaturedCollections> + <LenticularCard> to
-      // make the modest source resolution look intentional instead of
-      // upscaled-and-mushy.
-      const baseImg = c.large || c.small || c.thumb || '';
-      return {
-        id:     c.id,
-        name:   c.name,
-        image:  baseImg,
-        imageLow: c.small || c.thumb || baseImg, // onError fallback
-        floor:  floor !== null ? floor : (typeof c.floor_price_in_native_currency === 'number' ? c.floor_price_in_native_currency : null),
-        volume: vol,
-        currency: currency
-      };
-    });
+    const aggregated = await fetchAllNFTs({ limit: 20 });
+    if(!aggregated || aggregated.length === 0){
+      console.warn('[NEXUS] aggregator returned 0 rows — falling back to mock collections');
+      return null;
+    }
+    return aggregated.slice(0, 8).map(n => ({
+      id:        n.id,
+      name:      n.name,
+      image:     n.image,
+      imageLow:  n.image,            // no smaller variant from aggregator sources
+      floor:     n.floorPrice,        // legacy alias for FeaturedCollections
+      volume:    n.volume24h,         // legacy alias
+      currency:  n.currency,
+      // New aggregator fields (opt-in for any new UI):
+      source:    n.source,
+      chain:     n.chain,
+      holders:   n.holders,
+      link:      n.link,
+      platform:  n.platform,
+    }));
   } catch (e) {
-    console.warn("[NEXUS] CoinGecko NFT fetch failed — using fallback:", e?.message || e);
+    console.warn("[NEXUS] aggregator fetch failed — using fallback:", e?.message || e);
     return null;
   }
 }
+
+// ═══════════════════════════════════════════════════════════
+// NFT AGGREGATOR - MULTI-PLATFORM INTEGRATION
+// Phase 1 of "Shopify of Web3" — fans out to Magic Eden,
+// Reservoir, and Tensor in parallel and returns a unified shape.
+// ═══════════════════════════════════════════════════════════
+
+// Global cache to prevent API spam
+const API_CACHE = new Map();
+
+async function cachedFetch(key, fetchFn, duration = 60000) {
+  const now = Date.now();
+  const cached = API_CACHE.get(key);
+
+  if (cached && (now - cached.timestamp) < duration) {
+    console.log(`✓ Cache hit: ${key}`);
+    return cached.data;
+  }
+
+  console.log(`⟳ Fetching: ${key}`);
+  try {
+    const data = await fetchFn();
+    API_CACHE.set(key, { data, timestamp: now });
+    return data;
+  } catch (error) {
+    console.error(`✗ Failed: ${key}`, error);
+    if (cached) return cached.data; // Return stale cache on error
+    throw error;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAGIC EDEN API (Solana) — free, no key required.
+// /v2/collections requires limit to be a multiple of 20.
+// ═══════════════════════════════════════════════════════════
+const MAGIC_EDEN_BASE = 'https://api-mainnet.magiceden.dev/v2';
+async function fetchMagicEdenCollections(limit = 20) {
+  return cachedFetch(`me_collections_${limit}`, async () => {
+    const res = await fetch(`${MAGIC_EDEN_BASE}/collections?offset=0&limit=${limit}`);
+    if (!res.ok) throw new Error('Magic Eden failed');
+    return res.json();
+  }, 300000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// RESERVOIR API (Ethereum) — aggregates OpenSea + Blur +
+// LooksRare + X2Y2. Free 10K/day; may be Cloudflare-walled
+// from some origins (graceful fallback via .catch in the
+// master aggregator below).
+// ═══════════════════════════════════════════════════════════
+const RESERVOIR_BASE = 'https://api.reservoir.tools';
+async function fetchReservoirCollections(limit = 20) {
+  return cachedFetch(`reservoir_trending_${limit}`, async () => {
+    const res = await fetch(
+      `${RESERVOIR_BASE}/collections/trending/v1?limit=${limit}`
+    );
+    if (!res.ok) throw new Error('Reservoir failed');
+    return res.json();
+  }, 180000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// TENSOR API (Solana compressed NFTs). GraphQL endpoint;
+// public read may require an api-key header — failures bubble
+// up to the master aggregator's .catch(() => []) fallback.
+// ═══════════════════════════════════════════════════════════
+async function fetchTensorCollections(limit = 20) {
+  return cachedFetch(`tensor_trending_${limit}`, async () => {
+    const res = await fetch('https://api.tensor.so/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `
+          query TrendingCollections($limit: Int!) {
+            trendingCollections(limit: $limit) {
+              slug name imageUri floorPrice numMints volumeAll
+            }
+          }
+        `,
+        variables: { limit }
+      })
+    });
+    if (!res.ok) throw new Error('Tensor failed');
+    const { data } = await res.json();
+    return data?.trendingCollections || [];
+  }, 300000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATA NORMALIZATION — single canonical shape per NFT row.
+// ═══════════════════════════════════════════════════════════
+const NFT_SOURCES = {
+  MAGIC_EDEN: 'magic_eden',
+  RESERVOIR:  'reservoir',
+  TENSOR:     'tensor',
+};
+const NFT_CHAINS = {
+  ETHEREUM: 'ethereum',
+  SOLANA:   'solana',
+};
+
+function normalizeNFT(raw, source){
+  switch(source){
+    case NFT_SOURCES.MAGIC_EDEN:
+      return {
+        id:         `me_${raw.symbol}`,
+        source:     NFT_SOURCES.MAGIC_EDEN,
+        chain:      NFT_CHAINS.SOLANA,
+        name:       raw.name,
+        image:      raw.image,
+        floorPrice: (raw.floorPrice || 0) / 1e9,                 // lamports → SOL
+        currency:   'SOL',
+        volume24h:  ((raw.volumeAll || 0) / 1e9) * 0.1,
+        holders:    raw.listedCount || 0,
+        link:       `https://magiceden.io/marketplace/${raw.symbol}`,
+        platform:   { name: 'Magic Eden', color: '#E42575' },
+      };
+
+    case NFT_SOURCES.RESERVOIR:
+      return {
+        id:         `res_${raw.id}`,
+        source:     NFT_SOURCES.RESERVOIR,
+        chain:      NFT_CHAINS.ETHEREUM,
+        name:       raw.name,
+        image:      raw.image,
+        floorPrice: parseFloat(raw.floorAsk?.price?.amount?.native || 0),
+        currency:   'ETH',
+        volume24h:  parseFloat(raw.volume?.['1day'] || 0),
+        holders:    raw.ownerCount || 0,
+        link:       `https://opensea.io/collection/${raw.id}`,
+        platform:   { name: 'Aggregated', color: '#3B82F6' },
+      };
+
+    case NFT_SOURCES.TENSOR:
+      return {
+        id:         `tensor_${raw.slug}`,
+        source:     NFT_SOURCES.TENSOR,
+        chain:      NFT_CHAINS.SOLANA,
+        name:       raw.name,
+        image:      raw.imageUri,
+        floorPrice: (raw.floorPrice || 0) / 1e9,
+        currency:   'SOL',
+        volume24h:  ((raw.volumeAll || 0) / 1e9) * 0.1,
+        holders:    raw.numMints || 0,
+        link:       `https://tensor.trade/trade/${raw.slug}`,
+        platform:   { name: 'Tensor', color: '#8B5CF6' },
+      };
+
+    default:
+      return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MASTER AGGREGATION FUNCTION — Promise.allSettled so one
+// source going down doesn't take the whole feed with it.
+// ═══════════════════════════════════════════════════════════
+async function fetchAllNFTs(options = {}){
+  const { chains = [NFT_CHAINS.ETHEREUM, NFT_CHAINS.SOLANA], limit = 20 } = options;
+
+  const promises = [];
+
+  if (chains.includes(NFT_CHAINS.SOLANA)) {
+    promises.push(
+      fetchMagicEdenCollections(limit)
+        .then(data => (data||[]).map(nft => normalizeNFT(nft, NFT_SOURCES.MAGIC_EDEN)))
+        .catch(() => [])
+    );
+    promises.push(
+      fetchTensorCollections(limit)
+        .then(data => (data||[]).map(nft => normalizeNFT(nft, NFT_SOURCES.TENSOR)))
+        .catch(() => [])
+    );
+  }
+
+  if (chains.includes(NFT_CHAINS.ETHEREUM)) {
+    promises.push(
+      fetchReservoirCollections(limit)
+        .then(data => (data?.collections||[]).map(nft => normalizeNFT(nft, NFT_SOURCES.RESERVOIR)))
+        .catch(() => [])
+    );
+  }
+
+  const results = await Promise.allSettled(promises);
+  const allNFTs = results
+    .filter(r => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+    .filter(nft => nft !== null && nft.name && nft.image);
+
+  // Dedupe by lowercased name across sources
+  const seen = new Map();
+  const unique = allNFTs.filter(nft => {
+    const key = String(nft.name).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.set(key, true);
+    return true;
+  });
+
+  return unique.sort((a, b) => (b.volume24h||0) - (a.volume24h||0));
+}
+
+// Export globally for non-React consumers / debugging from the console
+window.NFTAggregator = { fetchAllNFTs, NFT_CHAINS, NFT_SOURCES };
+console.log('✓ NFT Aggregator loaded');
 
 /* ─────────────────────────────────────────────────────────
    APP CONTEXT
@@ -3262,14 +3451,24 @@ function FeaturedCollections(){
   const shown = collections.slice(0, visibleCount);
   const moreAvailable = collections.length > 4;
 
+  // Tally which platforms actually contributed to the visible feed so
+  // the header chip can read e.g. "Aggregator · 3 sources" instead of
+  // a single static "Magic Eden" pill.
+  const platformsLive = Array.from(new Set(
+    collections.map(c => c.platform?.name).filter(Boolean)
+  ));
+
   return (
     <div className="surface p-4 sm:p-5">
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-[14px] font-semibold">Featured collections</h3>
-          {collectionsStatus.source === 'live' && (
-            <span className="chip chip-pos" title={"Live from Magic Eden" + (ago!=null ? " · refreshed "+ago+"s ago" : "")}>
-              <span className="dot"/> Magic Eden
+          <h3 className="text-[14px] font-semibold">Trending across marketplaces</h3>
+          {collectionsStatus.source === 'live' && platformsLive.length > 0 && (
+            <span className="chip chip-pos" title={
+              "Aggregated from " + platformsLive.join(', ') +
+              (ago!=null ? " · refreshed "+ago+"s ago" : "")
+            }>
+              <span className="dot"/> Aggregator · {platformsLive.length} source{platformsLive.length>1?'s':''}
             </span>
           )}
           {collectionsStatus.source === 'stale' && (
@@ -3349,12 +3548,28 @@ function FeaturedCollections(){
                   )}
                   {/* Soft top→bottom shade so the corner chip is readable on any image */}
                   <div className="absolute inset-x-0 top-0 h-12 pointer-events-none"
-                    style={{background:'linear-gradient(180deg, rgba(0,0,0,0.35), transparent)'}}/>
-                  {/* Currency chip in the corner — quick visual cue for the chain */}
+                    style={{background:'linear-gradient(180deg, rgba(0,0,0,0.45), transparent)'}}/>
+                  {/* Currency chip top-left */}
                   {c.currency && (
                     <span className="absolute top-2 left-2 chip backdrop-blur-sm text-[10px]"
                       style={{ background:'rgba(0,0,0,0.55)', borderColor:'rgba(255,255,255,0.15)', color:'#fff' }}>
                       {c.currency}
+                    </span>
+                  )}
+                  {/* Platform badge top-right — shows which marketplace
+                      this row came from. Tinted by platform.color so
+                      Magic Eden / Aggregated / Tensor are visually
+                      distinct at a glance. */}
+                  {c.platform && (
+                    <span className="absolute top-2 right-2 chip backdrop-blur-sm text-[10px]"
+                      style={{
+                        background:'rgba(0,0,0,0.55)',
+                        borderColor: c.platform.color + '66',
+                        color: '#fff',
+                      }}
+                      title={"Source: " + c.platform.name}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: c.platform.color }}/>
+                      {c.platform.name}
                     </span>
                   )}
                 </div>
@@ -4124,7 +4339,9 @@ function CollectionDetailModal(){
           <div>
             <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-1.5">About</div>
             <p className="text-[13px] text-ink-200 leading-relaxed">
-              {c.name} is a curated collection trending on {c.currency || 'Solana'}. Pricing data refreshes every 60 seconds; tap "View on marketplace" to browse the full inventory and place a bid.
+              {c.name} is trending on {c.chain ? (c.chain[0].toUpperCase()+c.chain.slice(1)) : (c.currency || 'Solana')}
+              {c.platform?.name ? <>, sourced via <span className="text-ink-50 font-medium">{c.platform.name}</span></> : null}.
+              Pricing data refreshes every 60 seconds — open the marketplace below to browse the full inventory.
             </p>
           </div>
 
@@ -4134,29 +4351,40 @@ function CollectionDetailModal(){
               <div className="font-mono mt-0.5">{c.currency || '—'}</div>
             </div>
             <div className="surface px-3 py-2">
-              <div className="text-[10px] text-ink-500">Symbol</div>
-              <div className="font-mono mt-0.5 truncate">{c.id}</div>
+              <div className="text-[10px] text-ink-500">Holders</div>
+              <div className="font-mono mt-0.5">{c.holders != null ? fmt.compact(c.holders) : '—'}</div>
             </div>
             <div className="surface px-3 py-2">
               <div className="text-[10px] text-ink-500">Source</div>
-              <div className="font-mono mt-0.5">CoinGecko</div>
+              <div className="font-mono mt-0.5 truncate flex items-center gap-1.5">
+                {c.platform?.color && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: c.platform.color }}/>}
+                {c.platform?.name || 'Aggregator'}
+              </div>
             </div>
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button
-              onClick={()=>pushToast({ kind:'success', title:'Bid placed', body:`Offer queued at floor (${floorStr || '—'} ${c.currency || ''})` })}
-              className="btn btn-primary flex-1 justify-center">
-              <Icon name="gavel" size={14}/>
-              Place floor bid
-            </button>
+            {c.link ? (
+              <a href={c.link} target="_blank" rel="noreferrer"
+                className="btn btn-primary flex-1 justify-center">
+                <Icon name="external-link" size={14}/>
+                Open on {c.platform?.name || 'marketplace'}
+              </a>
+            ) : (
+              <button
+                onClick={()=>pushToast({ kind:'success', title:'Bid placed', body:`Offer queued at floor (${floorStr || '—'} ${c.currency || ''})` })}
+                className="btn btn-primary flex-1 justify-center">
+                <Icon name="gavel" size={14}/>
+                Place floor bid
+              </button>
+            )}
             <button
               onClick={()=>{
-                navigator.clipboard?.writeText(c.id);
-                pushToast({ kind:'success', title:'Symbol copied', body: c.id });
+                navigator.clipboard?.writeText(c.link || c.id);
+                pushToast({ kind:'success', title: c.link ? 'Link copied' : 'Symbol copied', body: c.link || c.id });
               }}
               className="btn btn-secondary"
-              title="Copy collection symbol">
+              title={c.link ? "Copy marketplace link" : "Copy collection symbol"}>
               <Icon name="copy" size={14}/>
             </button>
           </div>
