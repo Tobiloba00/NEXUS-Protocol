@@ -552,32 +552,58 @@ const PROJECT_CONFIG = {
   ticker: "NXS",
   network: "Solana",
   contract: "Nx5pR0t0c0L2Tx7vQwK2pRmL4Z5n1DfH3JvA8YsBcNxEfR",
-  features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
+  features: {
+    showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true,
+    showCopyTrading:false, showSecurity:true, showFees:true,
+  },
   brand: { primary: "#8b5cf6", secondary: "#22d3ee", logo: "" },
+  social: { twitter:"", discord:"", telegram:"", medium:"", github:"" },
 };
+
+/* Catalog of toggleable features — drives the admin panel's
+   Features tab. Each entry maps an internal flag to the route
+   it gates plus UI metadata. */
+const FEATURE_FLAGS = [
+  { key:"showNFTs",        label:"NFT Marketplace",   icon:"image",       desc:"Curated collections, mint + trade flow",       route:"/marketplace" },
+  { key:"showStaking",     label:"Staking Pools",     icon:"layers",      desc:"Lock tokens, earn protocol revenue",           route:"/staking" },
+  { key:"showGovernance",  label:"DAO Governance",    icon:"vote",        desc:"Proposal voting + treasury controls",          route:"/governance" },
+  { key:"showAnalytics",   label:"Analytics Dashboard", icon:"line-chart",desc:"On-chain intelligence + TradingView charts",   route:"/analytics" },
+  { key:"showCopyTrading", label:"Copy Trading",      icon:"copy",        desc:"Mirror top wallets — coming soon",             route:"/copy-trading", badge:"Coming soon", disabled:true },
+  { key:"showSecurity",    label:"Security Page",     icon:"shield-check",desc:"Audits, non-custodial pitch, bug bounty",      route:"/security" },
+  { key:"showFees",        label:"Fee Schedule",      icon:"percent",     desc:"Trading tiers, withdrawal fees, VIP program",  route:"/fees" },
+];
+
+/* Social link inputs — drives the admin Social tab + the footer
+   Connect column. Empty strings hide the link in the footer. */
+const SOCIAL_FIELDS = [
+  { key:"twitter",  label:"Twitter / X", icon:"twitter",        ph:"https://x.com/your-handle"            },
+  { key:"discord",  label:"Discord",     icon:"message-circle", ph:"https://discord.gg/invite-code"       },
+  { key:"telegram", label:"Telegram",    icon:"send",           ph:"https://t.me/your-channel"            },
+  { key:"medium",   label:"Medium",      icon:"book-open",      ph:"https://medium.com/@your-publication" },
+  { key:"github",   label:"GitHub",      icon:"github",         ph:"https://github.com/your-org"          },
+];
 
 /* Pre-baked brand identities for the admin panel preset buttons.
    Each preset sets ALL fields the panel exposes. */
+/* Presets carry only brand identity. Feature toggles and social
+   links are user-state and persist across preset swaps. */
 const CONFIG_PRESETS = {
   nexus: {
     name: "NEXUS Protocol",  shortName: "nexus",   ticker: "NXS",
     network: "Solana",
     contract: "Nx5pR0t0c0L2Tx7vQwK2pRmL4Z5n1DfH3JvA8YsBcNxEfR",
-    features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
     brand: { primary: "#8b5cf6", secondary: "#22d3ee", logo: "" },
   },
   chronos: {
     name: "CHRONOS",  shortName: "chronos",  ticker: "TIME",
     network: "Ethereum",
     contract: "0xCh70n0573x7vQwK2pRmL4Z5n1DfH3JvA8YsBcNx",
-    features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
     brand: { primary: "#ec4899", secondary: "#a78bfa", logo: "⏳" },
   },
   vertex: {
     name: "VERTEX",  shortName: "vertex",  ticker: "VTX",
     network: "Base",
     contract: "0xV3r73x71n4nc34Z5n1DfH3JvA8YsBcNxEfRgT",
-    features: { showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true },
     brand: { primary: "#10b981", secondary: "#22d3ee", logo: "📈" },
   },
 };
@@ -1209,8 +1235,16 @@ function AppProvider({ children }){
       const raw = localStorage.getItem('nexus-config');
       if(raw){
         const parsed = JSON.parse(raw);
+        // Preserve nested defaults: top-level Object.assign would replace
+        // brand/features/social entirely with whatever's persisted, dropping
+        // any keys we've added since the user last saved.
+        const defaultBrand    = { ...PROJECT_CONFIG.brand };
+        const defaultFeatures = { ...PROJECT_CONFIG.features };
+        const defaultSocial   = { ...PROJECT_CONFIG.social };
         Object.assign(PROJECT_CONFIG, parsed);
-        if(parsed.brand) Object.assign(PROJECT_CONFIG.brand, parsed.brand);
+        PROJECT_CONFIG.brand    = { ...defaultBrand,    ...(parsed.brand    || {}) };
+        PROJECT_CONFIG.features = { ...defaultFeatures, ...(parsed.features || {}) };
+        PROJECT_CONFIG.social   = { ...defaultSocial,   ...(parsed.social   || {}) };
         return { ...PROJECT_CONFIG };
       }
     } catch(_){}
@@ -1222,6 +1256,7 @@ function AppProvider({ children }){
     Object.assign(PROJECT_CONFIG, next);
     if(next.features) Object.assign(PROJECT_CONFIG.features, next.features);
     if(next.brand)    Object.assign(PROJECT_CONFIG.brand,    next.brand);
+    if(next.social)   Object.assign(PROJECT_CONFIG.social,   next.social);
     // Apply colors to CSS vars
     applyBrandColors(PROJECT_CONFIG.brand);
     // Persist
@@ -1367,10 +1402,17 @@ function AppProvider({ children }){
   useEffect(()=> teardownListeners, [teardownListeners]);
 
   const resetConfig = useCallback(() => {
-    // Wipe storage and reload PROJECT_CONFIG from the NEXUS preset
+    // Wipe storage and rebuild PROJECT_CONFIG from the NEXUS preset
+    // plus the canonical default features + empty social block
+    // (presets only carry brand identity).
     try { localStorage.removeItem('nexus-config'); } catch(_){}
     Object.keys(PROJECT_CONFIG).forEach(k => delete PROJECT_CONFIG[k]);
     Object.assign(PROJECT_CONFIG, JSON.parse(JSON.stringify(CONFIG_PRESETS.nexus)));
+    PROJECT_CONFIG.features = {
+      showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true,
+      showCopyTrading:false, showSecurity:true, showFees:true,
+    };
+    PROJECT_CONFIG.social = { twitter:"", discord:"", telegram:"", medium:"", github:"" };
     applyBrandColors(PROJECT_CONFIG.brand);
     setConfigState({ ...PROJECT_CONFIG });
   }, []);
@@ -1629,8 +1671,8 @@ const NAV_GROUPS = [
     { to:"/governance",  label:"Governance",  icon:"vote",        flag:"showGovernance" },
   ]},
   { label:"Resources", items: [
-    { to:"/security",    label:"Security",    icon:"shield-check" },
-    { to:"/fees",        label:"Fees",        icon:"percent" },
+    { to:"/security",    label:"Security",    icon:"shield-check", flag:"showSecurity" },
+    { to:"/fees",        label:"Fees",        icon:"percent",      flag:"showFees" },
   ]},
   { label:"Account", items: [
     { to:"/profile",     label:"Portfolio",   icon:"wallet" },
@@ -4129,6 +4171,7 @@ function CollectionDetailModal(){
 function AdminPanel(){
   const { showAdmin, setShowAdmin, config, setConfig, resetConfig, pushToast } = useApp();
   const [draft, setDraft] = useState(()=> JSON.parse(JSON.stringify(config)));
+  const [panelTab, setPanelTab] = useState('branding');
   const fileRef = useRef(null);
   const livePreviewRef = useRef(false);
 
@@ -4175,14 +4218,28 @@ function AdminPanel(){
 
   const reset = () => {
     resetConfig();
-    setDraft(JSON.parse(JSON.stringify(CONFIG_PRESETS.nexus)));
+    setDraft({
+      ...JSON.parse(JSON.stringify(CONFIG_PRESETS.nexus)),
+      features: {
+        showNFTs:true, showStaking:true, showGovernance:true, showAnalytics:true,
+        showCopyTrading:false, showSecurity:true, showFees:true,
+      },
+      social: { twitter:"", discord:"", telegram:"", medium:"", github:"" },
+    });
+    setPanelTab('branding');
     pushToast({ kind:'info', title:'Reset to NEXUS' });
   };
 
   const loadPreset = (key) => {
     const preset = CONFIG_PRESETS[key];
     if(!preset) return;
-    setDraft(JSON.parse(JSON.stringify(preset)));
+    // Presets only carry brand identity — preserve the user's current
+    // feature toggles and social links across the swap.
+    setDraft(prev => ({
+      ...JSON.parse(JSON.stringify(preset)),
+      features: prev.features ? { ...prev.features } : {},
+      social:   prev.social   ? { ...prev.social   } : {},
+    }));
   };
 
   const exportConfig = () => {
@@ -4209,11 +4266,14 @@ function AdminPanel(){
       try {
         const parsed = JSON.parse(String(reader.result));
         if(typeof parsed !== 'object' || !parsed) throw new Error('Not a JSON object');
-        // Merge against the NEXUS preset so missing fields fall back sensibly
-        const merged = JSON.parse(JSON.stringify(CONFIG_PRESETS.nexus));
+        // Merge against the full current PROJECT_CONFIG so missing nested
+        // fields (e.g. a new feature flag the imported file pre-dates)
+        // fall back to the live defaults instead of becoming undefined.
+        const merged = JSON.parse(JSON.stringify(PROJECT_CONFIG));
         Object.assign(merged, parsed);
         if(parsed.features) merged.features = { ...merged.features, ...parsed.features };
         if(parsed.brand)    merged.brand    = { ...merged.brand,    ...parsed.brand };
+        if(parsed.social)   merged.social   = { ...merged.social,   ...parsed.social };
         setDraft(merged);
         pushToast({ kind:'success', title:'Config imported', body: 'Click Apply to commit' });
       } catch (e) {
@@ -4245,10 +4305,153 @@ function AdminPanel(){
     );
   };
 
+  /* Tab content blocks — separated for readability */
+  const BrandingTab = (
+    <div className="space-y-5">
+      {/* Identity fields */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-500">Project name</label>
+          <input className="input mt-1" value={draft.name||''}
+            onChange={e=>update('name', e.target.value)} placeholder="NEXUS Protocol"/>
+        </div>
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-500">Ticker symbol</label>
+          <input className="input mt-1 font-mono uppercase" value={draft.ticker||''}
+            onChange={e=>update('ticker', e.target.value.toUpperCase().slice(0,8))} placeholder="NXS"/>
+        </div>
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-500">Network</label>
+          <select className="input mt-1" value={draft.network||'Solana'}
+            onChange={e=>update('network', e.target.value)}>
+            {SUPPORTED_NETWORKS.map(n => <option key={n}>{n}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-500">Short slug</label>
+          <input className="input mt-1 font-mono" value={draft.shortName||''}
+            onChange={e=>update('shortName', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,''))} placeholder="nexus"/>
+        </div>
+      </div>
+
+      {/* Brand colors + logo */}
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Brand</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex items-center gap-3">
+            <input type="color" value={draft.brand?.primary || '#8b5cf6'}
+              onChange={e=>update('brand.primary', e.target.value)}
+              className="w-12 h-10 rounded-lg border border-line bg-transparent cursor-pointer flex-shrink-0"
+              title="Primary color"/>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px]">Primary</div>
+              <input className="input mt-1 font-mono text-[12px]" value={draft.brand?.primary || ''}
+                onChange={e=>update('brand.primary', e.target.value)} placeholder="#8b5cf6"/>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <input type="color" value={draft.brand?.secondary || '#22d3ee'}
+              onChange={e=>update('brand.secondary', e.target.value)}
+              className="w-12 h-10 rounded-lg border border-line bg-transparent cursor-pointer flex-shrink-0"
+              title="Secondary color"/>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px]">Secondary</div>
+              <input className="input mt-1 font-mono text-[12px]" value={draft.brand?.secondary || ''}
+                onChange={e=>update('brand.secondary', e.target.value)} placeholder="#22d3ee"/>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="text-[12px]">Logo override</label>
+          <div className="text-[11px] text-ink-500 mb-1">Emoji (⏳, 📈, etc.) or full image URL. Leave empty for the default N mark.</div>
+          <div className="flex items-center gap-2">
+            <input className="input flex-1" value={draft.brand?.logo || ''}
+              onChange={e=>update('brand.logo', e.target.value)}
+              placeholder="📈 or https://…"/>
+            <div className="w-12 h-12 rounded-xl2 bg-surface border border-line flex items-center justify-center flex-shrink-0 overflow-hidden">
+              {(()=>{
+                const l = draft.brand?.logo || '';
+                if(!l) return <span className="text-ink-500 text-[10px]">N</span>;
+                if(/^(https?:|\/|data:)/i.test(l))
+                  return <img src={l} alt="" className="w-full h-full object-cover" onError={e=>{e.currentTarget.style.display='none';}}/>;
+                return (
+                  <span style={{
+                    display:'inline-flex', alignItems:'center', justifyContent:'center',
+                    width:'100%', height:'100%',
+                    background:'linear-gradient(135deg, var(--accent), var(--accent-2))',
+                    fontSize:24, color:'#fff',
+                  }}>{l}</span>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const FeaturesTab = (
+    <div>
+      <div className="text-[12px] text-ink-400 mb-3 leading-relaxed">
+        Toggle modules on or off — disabled features are pruned from the sidebar and their routes redirect to the dashboard. Use this to ship a leaner UI for early-stage protocols or A/B test before rollout.
+      </div>
+      <div className="space-y-2">
+        {FEATURE_FLAGS.map(f => {
+          const enabled = !!draft.features?.[f.key];
+          return (
+            <div key={f.key} className={"flex items-center gap-3 px-3 py-2.5 rounded-xl2 border transition-colors "+(enabled?"border-line-2 bg-[var(--primary-soft)]":"border-line bg-surface")}>
+              <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: enabled ? 'rgba(var(--glow),0.15)' : 'var(--hover)', color: enabled ? 'var(--accent)' : 'var(--ink-400)' }}>
+                <Icon name={f.icon} size={15}/>
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="text-[13px] font-medium">{f.label}</div>
+                  {f.badge && <span className="chip text-[9px]">{f.badge}</span>}
+                  <span className="text-[10px] text-ink-500 font-mono">{f.route}</span>
+                </div>
+                <div className="text-[11px] text-ink-400 truncate">{f.desc}</div>
+              </div>
+              <span className="switch" data-on={enabled}
+                onClick={()=>update('features.'+f.key, !enabled)}>
+                <span/>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 text-[11px] text-ink-500 leading-relaxed border-t border-line pt-3">
+        <strong className="text-ink-300">Note:</strong> Disabling a feature also strips its links from the footer and gates direct URL access via the catch-all route. The change persists to <code className="font-mono">localStorage.nexus-config</code> on Apply.
+      </div>
+    </div>
+  );
+
+  const SocialTab = (
+    <div>
+      <div className="text-[12px] text-ink-400 mb-3 leading-relaxed">
+        Populate the footer's <strong>Connect</strong> column. Leave any field empty to hide it from the footer entirely.
+      </div>
+      <div className="space-y-3">
+        {SOCIAL_FIELDS.map(s => (
+          <div key={s.key}>
+            <label className="text-[11px] uppercase tracking-wider text-ink-500 flex items-center gap-1.5">
+              <Icon name={s.icon} size={12}/> {s.label}
+            </label>
+            <input className="input mt-1 font-mono text-[12.5px]" value={draft.social?.[s.key] || ''}
+              onChange={e=>update('social.'+s.key, e.target.value)} placeholder={s.ph}/>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 text-[11px] text-ink-500 leading-relaxed border-t border-line pt-3">
+        URLs are passed through verbatim — make sure each starts with <code className="font-mono">https://</code> for the footer links to work in a new tab.
+      </div>
+    </div>
+  );
+
   return (
     <Modal open onClose={()=>setShowAdmin(false)} title="Admin · Rebrand console" size="lg">
       <div className="space-y-5">
-        {/* Presets */}
+        {/* Presets — picking one only changes brand fields */}
         <div>
           <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Presets</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -4258,87 +4461,30 @@ function AdminPanel(){
           </div>
         </div>
 
-        {/* Identity fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-[11px] uppercase tracking-wider text-ink-500">Project name</label>
-            <input className="input mt-1" value={draft.name||''}
-              onChange={e=>update('name', e.target.value)} placeholder="NEXUS Protocol"/>
-          </div>
-          <div>
-            <label className="text-[11px] uppercase tracking-wider text-ink-500">Ticker symbol</label>
-            <input className="input mt-1 font-mono uppercase" value={draft.ticker||''}
-              onChange={e=>update('ticker', e.target.value.toUpperCase().slice(0,8))} placeholder="NXS"/>
-          </div>
-          <div>
-            <label className="text-[11px] uppercase tracking-wider text-ink-500">Network</label>
-            <select className="input mt-1" value={draft.network||'Solana'}
-              onChange={e=>update('network', e.target.value)}>
-              {SUPPORTED_NETWORKS.map(n => <option key={n}>{n}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[11px] uppercase tracking-wider text-ink-500">Short slug</label>
-            <input className="input mt-1 font-mono" value={draft.shortName||''}
-              onChange={e=>update('shortName', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,''))} placeholder="nexus"/>
+        {/* Tab bar */}
+        <div className="border-b border-line -mx-1">
+          <div className="flex items-center gap-1 px-1">
+            {[
+              { id:'branding', label:'Branding', icon:'palette' },
+              { id:'features', label:'Features', icon:'sliders-horizontal' },
+              { id:'social',   label:'Social',   icon:'share-2' },
+            ].map(t => (
+              <button key={t.id} onClick={()=>setPanelTab(t.id)}
+                className={"relative px-3 py-2 text-[12.5px] font-medium transition-colors flex items-center gap-1.5 "+(panelTab===t.id?"text-ink-50":"text-ink-400 hover:text-ink-200")}>
+                <Icon name={t.icon} size={13}/>
+                {t.label}
+                {panelTab===t.id && <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full" style={{background:'var(--accent)'}}/>}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Brand colors + logo */}
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Brand</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex items-center gap-3">
-              <input type="color" value={draft.brand?.primary || '#8b5cf6'}
-                onChange={e=>update('brand.primary', e.target.value)}
-                className="w-12 h-10 rounded-lg border border-line bg-transparent cursor-pointer flex-shrink-0"
-                title="Primary color"/>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12px]">Primary</div>
-                <input className="input mt-1 font-mono text-[12px]" value={draft.brand?.primary || ''}
-                  onChange={e=>update('brand.primary', e.target.value)} placeholder="#8b5cf6"/>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <input type="color" value={draft.brand?.secondary || '#22d3ee'}
-                onChange={e=>update('brand.secondary', e.target.value)}
-                className="w-12 h-10 rounded-lg border border-line bg-transparent cursor-pointer flex-shrink-0"
-                title="Secondary color"/>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12px]">Secondary</div>
-                <input className="input mt-1 font-mono text-[12px]" value={draft.brand?.secondary || ''}
-                  onChange={e=>update('brand.secondary', e.target.value)} placeholder="#22d3ee"/>
-              </div>
-            </div>
-          </div>
-          <div className="mt-3">
-            <label className="text-[12px]">Logo override</label>
-            <div className="text-[11px] text-ink-500 mb-1">Emoji (⏳, 📈, etc.) or full image URL. Leave empty for the default N mark.</div>
-            <div className="flex items-center gap-2">
-              <input className="input flex-1" value={draft.brand?.logo || ''}
-                onChange={e=>update('brand.logo', e.target.value)}
-                placeholder="📈 or https://…"/>
-              <div className="w-12 h-12 rounded-xl2 bg-surface border border-line flex items-center justify-center flex-shrink-0 overflow-hidden">
-                {(()=>{
-                  const l = draft.brand?.logo || '';
-                  if(!l) return <span className="text-ink-500 text-[10px]">N</span>;
-                  if(/^(https?:|\/|data:)/i.test(l))
-                    return <img src={l} alt="" className="w-full h-full object-cover" onError={e=>{e.currentTarget.style.display='none';}}/>;
-                  return (
-                    <span style={{
-                      display:'inline-flex', alignItems:'center', justifyContent:'center',
-                      width:'100%', height:'100%',
-                      background:'linear-gradient(135deg, var(--accent), var(--accent-2))',
-                      fontSize:24, color:'#fff',
-                    }}>{l}</span>
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Tab content */}
+        {panelTab === 'branding' && BrandingTab}
+        {panelTab === 'features' && FeaturesTab}
+        {panelTab === 'social'   && SocialTab}
 
-        {/* Action buttons */}
+        {/* Action buttons — common to all tabs */}
         <div className="border-t border-line pt-4 flex flex-wrap items-center gap-2 justify-between">
           <div className="flex flex-wrap gap-2">
             <button onClick={exportConfig} className="btn btn-secondary text-[12.5px]">
@@ -5931,36 +6077,63 @@ function Footer(){
           </div>
         </div>
 
-        {/* 4-column link grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 sm:gap-x-10 gap-y-8">
-          <FooterColumn title="Security">
-            <FooterLink to="/security" icon="shield-check">Audits & best practices</FooterLink>
-            <FooterLink to="/security" icon="lock">Non-custodial architecture</FooterLink>
-            <FooterLink to="/security" icon="snowflake">Cold storage policy</FooterLink>
-            <FooterLink to="/security" icon="bug">Bug bounty · up to $100K</FooterLink>
-          </FooterColumn>
+        {/* Link grid — Security/Fees columns gate on feature flags;
+            Connect column populates from config.social, hiding any
+            empty entries. */}
+        {(() => {
+          const f = config.features || {};
+          const s = config.social   || {};
+          const social = SOCIAL_FIELDS.filter(x => s[x.key]);
+          const columns = [];
 
-          <FooterColumn title="Fees">
-            <FooterLink to="/fees" icon="percent">Trading: 0.10–0.25%</FooterLink>
-            <FooterLink to="/fees" icon="zap">Network fees</FooterLink>
-            <FooterLink to="/fees" icon="trending-up">Staking rewards · up to 18% APR</FooterLink>
-            <FooterLink to="/fees" icon="crown">VIP program</FooterLink>
-          </FooterColumn>
+          if(f.showSecurity){
+            columns.push(
+              <FooterColumn key="sec" title="Security">
+                <FooterLink to="/security" icon="shield-check">Audits & best practices</FooterLink>
+                <FooterLink to="/security" icon="lock">Non-custodial architecture</FooterLink>
+                <FooterLink to="/security" icon="snowflake">Cold storage policy</FooterLink>
+                <FooterLink to="/security" icon="bug">Bug bounty · up to $100K</FooterLink>
+              </FooterColumn>
+            );
+          }
+          if(f.showFees){
+            columns.push(
+              <FooterColumn key="fees" title="Fees">
+                <FooterLink to="/fees" icon="percent">Trading: 0.10–0.25%</FooterLink>
+                <FooterLink to="/fees" icon="zap">Network fees</FooterLink>
+                {f.showStaking && <FooterLink to="/fees" icon="trending-up">Staking rewards · up to 18% APR</FooterLink>}
+                <FooterLink to="/fees" icon="crown">VIP program</FooterLink>
+              </FooterColumn>
+            );
+          }
+          columns.push(
+            <FooterColumn key="res" title="Resources">
+              {s.github
+                ? <FooterLink href={s.github} external icon="github">GitHub</FooterLink>
+                : <FooterLink href="#" external icon="book-open">Documentation</FooterLink>}
+              <FooterLink href="#" external icon="code">API reference</FooterLink>
+              <FooterLink href="#" external icon="activity">Status page</FooterLink>
+              <FooterLink href="#" external icon="file-text">Whitepaper</FooterLink>
+            </FooterColumn>
+          );
+          columns.push(
+            <FooterColumn key="connect" title="Connect">
+              {social.length > 0
+                ? social.map(x => <FooterLink key={x.key} href={s[x.key]} external icon={x.icon}>{x.label}</FooterLink>)
+                : <span className="text-[11.5px] text-ink-500 italic">Add social links via the admin panel (⌘+⇧+K)</span>}
+              <FooterLink href={"mailto:support@"+config.shortName+".io"} icon="mail">Support email</FooterLink>
+            </FooterColumn>
+          );
 
-          <FooterColumn title="Resources">
-            <FooterLink href="#" external icon="book-open">Documentation</FooterLink>
-            <FooterLink href="#" external icon="code">API reference</FooterLink>
-            <FooterLink href="#" external icon="github">GitHub</FooterLink>
-            <FooterLink href="#" external icon="activity">Status page</FooterLink>
-          </FooterColumn>
-
-          <FooterColumn title="Connect">
-            <FooterLink href="#" external icon="message-circle">Discord</FooterLink>
-            <FooterLink href="#" external icon="send">Telegram</FooterLink>
-            <FooterLink href="#" external icon="twitter">X / Twitter</FooterLink>
-            <FooterLink href={"mailto:support@"+config.shortName+".io"} icon="mail">Support email</FooterLink>
-          </FooterColumn>
-        </div>
+          const colsClass = columns.length === 4 ? "md:grid-cols-4"
+                          : columns.length === 3 ? "md:grid-cols-3"
+                          :                        "md:grid-cols-2";
+          return (
+            <div className={"grid grid-cols-2 gap-x-6 sm:gap-x-10 gap-y-8 "+colsClass}>
+              {columns}
+            </div>
+          );
+        })()}
 
         {/* Legal / copyright row */}
         <div className="border-t border-line mt-10 pt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] text-ink-500">
@@ -6011,23 +6184,34 @@ function Shell(){
   );
 }
 
+/* Routes live inside their own component so they re-evaluate when
+   admin-panel feature toggles flip — disabled features get pruned
+   from the route table and the catch-all redirects to /. */
+function AppRoutes(){
+  const { config } = useApp();
+  const f = config.features || {};
+  return (
+    <Routes>
+      <Route element={<Shell/>}>
+        <Route path="/" element={<MarketsPage/>}/>
+        {f.showNFTs       && <Route path="/marketplace" element={<MarketplacePage/>}/>}
+        {f.showStaking    && <Route path="/staking"     element={<StakingPage/>}/>}
+        {f.showGovernance && <Route path="/governance"  element={<GovernancePage/>}/>}
+        {f.showAnalytics  && <Route path="/analytics"   element={<AnalyticsPage/>}/>}
+        {f.showSecurity   && <Route path="/security"    element={<SecurityPage/>}/>}
+        {f.showFees       && <Route path="/fees"        element={<FeesPage/>}/>}
+        <Route path="/profile" element={<ProfilePage/>}/>
+        <Route path="*" element={<MarketsPage/>}/>
+      </Route>
+    </Routes>
+  );
+}
+
 function App(){
   return (
     <AppProvider>
       <HashRouter>
-        <Routes>
-          <Route element={<Shell/>}>
-            <Route path="/" element={<MarketsPage/>}/>
-            {PROJECT_CONFIG.features.showNFTs && <Route path="/marketplace" element={<MarketplacePage/>}/>}
-            {PROJECT_CONFIG.features.showStaking && <Route path="/staking" element={<StakingPage/>}/>}
-            {PROJECT_CONFIG.features.showGovernance && <Route path="/governance" element={<GovernancePage/>}/>}
-            {PROJECT_CONFIG.features.showAnalytics && <Route path="/analytics" element={<AnalyticsPage/>}/>}
-            <Route path="/security" element={<SecurityPage/>}/>
-            <Route path="/fees" element={<FeesPage/>}/>
-            <Route path="/profile" element={<ProfilePage/>}/>
-            <Route path="*" element={<MarketsPage/>}/>
-          </Route>
-        </Routes>
+        <AppRoutes/>
       </HashRouter>
     </AppProvider>
   );
