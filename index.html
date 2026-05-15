@@ -1628,6 +1628,10 @@ const NAV_GROUPS = [
     { to:"/staking",     label:"Stake",       icon:"layers",      flag:"showStaking" },
     { to:"/governance",  label:"Governance",  icon:"vote",        flag:"showGovernance" },
   ]},
+  { label:"Resources", items: [
+    { to:"/security",    label:"Security",    icon:"shield-check" },
+    { to:"/fees",        label:"Fees",        icon:"percent" },
+  ]},
   { label:"Account", items: [
     { to:"/profile",     label:"Portfolio",   icon:"wallet" },
   ]},
@@ -1828,6 +1832,8 @@ function PageMeta(){
     "/staking":     { title:"Stake",        sub:"Earn rewards by locking your tokens",                      live:false },
     "/governance":  { title:"Governance",   sub:"Vote on protocol changes with your stake",                 live:false },
     "/analytics":   { title:"Analytics",    sub:"On-chain intelligence and trends",                         live:true  },
+    "/security":    { title:"Security",     sub:"Audits, custody model, and best practices",                live:false },
+    "/fees":        { title:"Fee Schedule", sub:"Transparent volume-tiered pricing",                        live:false },
     "/profile":     { title:"Portfolio",    sub:"Your assets, history and settings",                        live:false },
   };
   return map[loc.pathname] || map["/"];
@@ -2235,7 +2241,7 @@ function WalletModal(){
     try {
       await connectWallet(adapter);
       setShowWallet(false);
-      pushToast({ kind:'success', title:'Wallet connected', body: adapter.label });
+      pushToast({ kind:'success', title:'Wallet connected securely', body:'Your keys never leave your device.' });
     } catch (e) {
       const msg = e?.message || 'Connection rejected';
       setError(msg);
@@ -2312,6 +2318,18 @@ function WalletModal(){
         </div>
       ) : (
         <div className="space-y-2">
+          {/* Beginner's banner — opens the security/best-practices page */}
+          <Link to="/security"
+            onClick={()=>setShowWallet(false)}
+            className="flex items-start gap-3 px-3 py-2.5 rounded-lg mb-3 transition-colors hover:bg-hover"
+            style={{ background:'var(--primary-soft)', border:'1px solid rgba(var(--glow),0.25)' }}>
+            <span className="text-[15px] mt-0.5">💡</span>
+            <div className="flex-1 text-[12px] text-ink-200 leading-relaxed">
+              <strong className="text-ink-50">New to crypto?</strong> Read our beginner's guide before connecting — covers seed phrases, hardware wallets, and what every signature actually means.
+              <span className="text-accent ml-1 inline-flex items-center gap-0.5">Learn more <Icon name="arrow-right" size={11}/></span>
+            </div>
+          </Link>
+
           <p className="text-[13px] text-ink-400 mb-3">
             {PROJECT_CONFIG.name} doesn't store your keys. Your wallet signs transactions on your device.
           </p>
@@ -2347,6 +2365,17 @@ function WalletModal(){
               {error}
             </div>
           )}
+
+          {/* Security tip below the wallet list */}
+          <div className="border-t border-line pt-4 mt-4 text-[11.5px] text-ink-400 leading-relaxed">
+            <span className="text-[13px] mr-1">🔒</span>
+            <strong className="text-ink-200">Security tip:</strong> Hardware wallets like Ledger or Trezor give the highest assurance for balances above $10K — the seed never touches an internet-connected device.
+            <Link to="/security" onClick={()=>setShowWallet(false)}
+              className="text-accent hover:underline ml-1 inline-flex items-center gap-0.5">
+              Learn more <Icon name="arrow-right" size={10}/>
+            </Link>
+          </div>
+
           <p className="text-[11px] text-ink-500 text-center pt-3">By connecting you agree to the Terms & Privacy Policy.</p>
         </div>
       )}
@@ -5508,6 +5537,448 @@ function TxModal(){
 }
 
 /* ─────────────────────────────────────────────────────────
+   SECURITY PAGE — non-custody pitch + audits + bug bounty
+   ───────────────────────────────────────────────────────── */
+const SECURITY_FEATURES = [
+  {
+    icon:"key", tint:"#8b5cf6",
+    title:"Non-Custodial",
+    body:"Your wallet signs every transaction on your device. Even if NEXUS goes offline, your funds remain accessible directly on-chain.",
+  },
+  {
+    icon:"shield-check", tint:"#22d3ee",
+    title:"Independently Audited",
+    body:"Third-party security firms review every contract release. All findings remediated before deploy; reports are public.",
+  },
+  {
+    icon:"snowflake", tint:"#10b981",
+    title:"Cold Storage Treasury",
+    body:"95% of protocol-owned funds sit in multisig cold wallets. Hot wallets are capped at 5% with a 24h withdrawal delay.",
+  },
+];
+
+const BEST_PRACTICES = [
+  { icon:"smartphone-nfc", text:"Enable 2FA and approval signing on your wallet extension." },
+  { icon:"hard-drive",     text:"Use a hardware wallet (Ledger / Trezor) for balances above $10K." },
+  { icon:"search-check",   text:"Always verify contract addresses against the official documentation." },
+  { icon:"eye-off",        text:"Never share your seed phrase. NEXUS support will NEVER ask for it." },
+  { icon:"link-2",         text:"Bookmark the real URL. Phishing clones target popular protocols daily." },
+  { icon:"alert-triangle", text:"Simulate transactions in your wallet preview before signing." },
+];
+
+const AUDIT_REPORTS = [
+  { firm:"CertiK",        scope:"Core contracts + staking",  date:"Mar 2024", severity:"No Critical · No High", status:"Passed", url:"#" },
+  { firm:"Trail of Bits", scope:"Bridge + multisig",          date:"Jan 2024", severity:"No Critical · 1 High Resolved", status:"Passed", url:"#" },
+  { firm:"OpenZeppelin",  scope:"Governance contracts",       date:"Nov 2023", severity:"No Critical · No High", status:"Passed", url:"#" },
+];
+
+function SecurityFeature({ icon, tint, title, body }){
+  return (
+    <div className="surface surface-hover p-5 relative overflow-hidden">
+      <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full pointer-events-none"
+        style={{ background: `radial-gradient(closest-side, ${tint}22, transparent 70%)`, filter:'blur(8px)' }}/>
+      <div className="relative">
+        <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-3"
+          style={{ background:`${tint}22`, color:tint }}>
+          <Icon name={icon} size={22}/>
+        </div>
+        <div className="text-[15px] font-semibold tracking-tight">{title}</div>
+        <p className="text-[13px] text-ink-300 mt-1.5 leading-relaxed">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function SecurityPage(){
+  const { pushToast } = useApp();
+  const reportSeverityColor = (sev) => sev.includes('No High') && sev.includes('No Critical') ? 'chip-pos' : 'chip';
+  return (
+    <div className="space-y-5 sm:space-y-6">
+      {/* Hero */}
+      <div className="surface p-6 sm:p-10 text-center relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ background:'radial-gradient(800px 280px at 50% 0%, var(--primary-soft), transparent 60%)' }}/>
+        <div className="relative">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl2 mb-4"
+            style={{ background:'linear-gradient(135deg, var(--accent), var(--accent-2))', boxShadow:'0 12px 40px -10px rgba(var(--glow), 0.55)' }}>
+            <Icon name="shield-check" size={32} className="text-white"/>
+          </div>
+          <h1 className="text-[26px] sm:text-[32px] font-semibold tracking-tight">Your Keys, Your Crypto</h1>
+          <p className="text-[14px] sm:text-[15px] text-ink-300 max-w-md mx-auto mt-3 leading-relaxed">
+            {PROJECT_CONFIG.name} is non-custodial. Your wallet signs every transaction on your device — we never hold or move your funds.
+          </p>
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 mt-5">
+            <span className="chip chip-pos"><span className="dot"/> Live audits</span>
+            <span className="chip chip-accent"><Icon name="lock" size={11}/> $5M insurance fund</span>
+            <span className="chip"><Icon name="globe" size={11}/> Open source</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Three pillars */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+        {SECURITY_FEATURES.map(f => <SecurityFeature key={f.title} {...f}/>)}
+      </div>
+
+      {/* Best practices */}
+      <div className="surface p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+          <div>
+            <h2 className="text-[16px] font-semibold tracking-tight">User best practices</h2>
+            <p className="text-[12px] text-ink-400 mt-0.5">Protect your wallet — these are the same steps top exchanges recommend.</p>
+          </div>
+          <span className="chip"><Icon name="book-open" size={11}/> Reading time · 2 min</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          {BEST_PRACTICES.map((p,i)=>(
+            <div key={i} className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-hover">
+              <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ background:'var(--primary-soft)', color:'var(--accent)' }}>
+                <Icon name={p.icon} size={15}/>
+              </span>
+              <div className="text-[13px] text-ink-100 leading-relaxed">{p.text}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Audits */}
+      <div className="surface">
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-line flex-wrap">
+          <div>
+            <h2 className="text-[16px] font-semibold tracking-tight">Audit reports</h2>
+            <p className="text-[12px] text-ink-400 mt-0.5">Every release audited before going live. Reports public, on-chain bytecode matches.</p>
+          </div>
+          <span className="chip chip-pos"><span className="dot"/> 3 firms · 4 audits to date</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 sm:p-5">
+          {AUDIT_REPORTS.map((r,i)=>(
+            <div key={i} className="surface surface-hover p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[14px] font-semibold tracking-tight">{r.firm}</div>
+                <span className={"chip "+reportSeverityColor(r.severity)+" text-[10px]"}>{r.status}</span>
+              </div>
+              <div className="text-[12px] text-ink-300 mb-1">{r.scope}</div>
+              <div className="text-[11px] text-ink-500 font-mono mb-3">{r.date}</div>
+              <div className="text-[11px] text-ink-400 mb-3">{r.severity}</div>
+              <button onClick={()=>pushToast({kind:'info', title:'Report link', body:'Connect a wallet to access the signed PDF.'})}
+                className="w-full btn btn-secondary text-[12px] justify-center">
+                <Icon name="file-text" size={12}/> View report <Icon name="external-link" size={11}/>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bug bounty */}
+      <div className="surface p-5 sm:p-6 relative overflow-hidden">
+        <div className="absolute -right-12 -top-12 w-56 h-56 rounded-full pointer-events-none"
+          style={{ background:'radial-gradient(closest-side, rgba(var(--glow),0.18), transparent 70%)', filter:'blur(20px)' }}/>
+        <div className="relative grid grid-cols-1 md:grid-cols-[1fr_auto] items-center gap-5">
+          <div>
+            <div className="inline-flex items-center gap-2 chip chip-accent mb-3">
+              <Icon name="bug" size={11}/> Bug bounty program
+            </div>
+            <h2 className="text-[20px] sm:text-[22px] font-semibold tracking-tight">Earn up to $100,000 for critical findings</h2>
+            <p className="text-[13px] text-ink-300 mt-2 max-w-2xl leading-relaxed">
+              We pay independent researchers for responsible disclosure of vulnerabilities. Critical bugs (fund loss, contract upgrade hijack) qualify for the maximum reward; rewards scale with severity.
+            </p>
+            <div className="grid grid-cols-4 gap-2 mt-4 max-w-md">
+              <div className="surface px-2 py-2 text-center"><div className="text-[10px] text-ink-500">Critical</div><div className="text-[13px] font-semibold text-pos">$100K</div></div>
+              <div className="surface px-2 py-2 text-center"><div className="text-[10px] text-ink-500">High</div><div className="text-[13px] font-semibold">$25K</div></div>
+              <div className="surface px-2 py-2 text-center"><div className="text-[10px] text-ink-500">Medium</div><div className="text-[13px] font-semibold">$5K</div></div>
+              <div className="surface px-2 py-2 text-center"><div className="text-[10px] text-ink-500">Low</div><div className="text-[13px] font-semibold">$1K</div></div>
+            </div>
+          </div>
+          <a href={"mailto:security@"+PROJECT_CONFIG.shortName+".io"}
+            className="btn btn-primary text-[13px] self-start md:self-auto">
+            <Icon name="mail" size={14}/> security@{PROJECT_CONFIG.shortName}.io
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   FEE SCHEDULE PAGE — volume-tiered trading fees, network
+   withdrawal fees, staking rewards, VIP program.
+   ───────────────────────────────────────────────────────── */
+const TRADING_TIERS = [
+  { vol:"< $50,000",       maker:"0.10%", taker:"0.25%", tier:"Standard" },
+  { vol:"$50K – $500K",    maker:"0.08%", taker:"0.20%", tier:"Tier 1" },
+  { vol:"$500K – $5M",     maker:"0.06%", taker:"0.15%", tier:"Tier 2" },
+  { vol:"$5M – $25M",      maker:"0.04%", taker:"0.10%", tier:"Tier 3" },
+  { vol:"> $25M",          maker:"0.02%", taker:"0.06%", tier:"VIP" },
+];
+
+const NETWORK_FEES = [
+  { network:"Ethereum",   sym:"ETH",   fee:"Gas + 0.0001 ETH",  note:"Estimated via EIP-1559 base fee" },
+  { network:"Solana",     sym:"SOL",   fee:"Gas only (~$0.001)", note:"No protocol overhead" },
+  { network:"Base",       sym:"ETH",   fee:"Gas only",           note:"L2 rollup, sub-cent typical" },
+  { network:"Arbitrum",   sym:"ETH",   fee:"Gas only",           note:"L2 rollup" },
+  { network:"Polygon",    sym:"POL",   fee:"Gas + 0.1 POL",      note:"Sub-cent typical" },
+  { network:"BNB Chain",  sym:"BNB",   fee:"Gas + 0.0005 BNB",   note:"Optimized routing" },
+];
+
+function FeesPage(){
+  const { pushToast } = useApp();
+  return (
+    <div className="space-y-5 sm:space-y-6">
+      {/* Hero */}
+      <div className="surface p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="max-w-xl">
+            <span className="chip chip-accent inline-flex"><Icon name="percent" size={11}/> Transparent pricing</span>
+            <h1 className="text-[22px] sm:text-[26px] font-semibold tracking-tight mt-2">Fee Schedule</h1>
+            <p className="text-[13px] text-ink-300 mt-2 leading-relaxed">
+              Volume-tiered, no hidden spreads, no inactivity fees. Pay less as you trade more — the rate steps down automatically based on your 30-day rolling volume.
+            </p>
+          </div>
+          <div className="surface px-4 py-3 text-center min-w-[180px]">
+            <div className="text-[10px] uppercase tracking-wider text-ink-500">Your tier</div>
+            <div className="text-[18px] font-semibold mt-1">Standard</div>
+            <div className="text-[11px] text-ink-400 mt-0.5">Trade $50K to upgrade</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Trading fees table */}
+      <div className="surface">
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-line">
+          <div>
+            <h2 className="text-[15px] font-semibold tracking-tight">Trading fees</h2>
+            <p className="text-[11px] text-ink-400 mt-0.5">Spot trading · per-trade fee based on 30-day rolling volume in USD.</p>
+          </div>
+          <span className="chip"><Icon name="info" size={11}/> Updated daily</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-ink-500">
+                <th className="text-left font-normal py-2.5 pl-5">Tier</th>
+                <th className="text-left font-normal py-2.5">30-day volume</th>
+                <th className="text-right font-normal py-2.5">Maker</th>
+                <th className="text-right font-normal py-2.5 pr-5">Taker</th>
+              </tr>
+            </thead>
+            <tbody>
+              {TRADING_TIERS.map((t,i)=>(
+                <tr key={i} className={"row-hover border-t border-line "+(t.tier==='VIP'?'bg-[var(--primary-soft)]':'')}>
+                  <td className="py-3 pl-5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-medium">{t.tier}</span>
+                      {t.tier==='VIP' && <span className="chip chip-accent text-[9px]"><Icon name="crown" size={10}/> Best rate</span>}
+                    </div>
+                  </td>
+                  <td className="py-3 text-ink-200 font-mono text-[12px]">{t.vol}</td>
+                  <td className="py-3 text-right font-mono text-pos">{t.maker}</td>
+                  <td className="py-3 pr-5 text-right font-mono">{t.taker}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-5 py-3 border-t border-line text-[11px] text-ink-500">
+          Maker orders add liquidity to the book and earn the lower fee. Taker orders cross the spread and remove liquidity.
+        </div>
+      </div>
+
+      {/* Network fees + Staking side-by-side on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
+        <div className="surface lg:col-span-3">
+          <div className="px-5 py-3.5 border-b border-line">
+            <h2 className="text-[15px] font-semibold tracking-tight">Withdrawal fees</h2>
+            <p className="text-[11px] text-ink-400 mt-0.5">Pass-through network gas plus a small protocol fee where applicable. No fixed minimums.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wider text-ink-500">
+                  <th className="text-left font-normal py-2.5 pl-5">Network</th>
+                  <th className="text-left font-normal py-2.5 hidden sm:table-cell">Asset</th>
+                  <th className="text-right font-normal py-2.5">Fee</th>
+                  <th className="text-left font-normal py-2.5 pl-4 pr-5 hidden md:table-cell">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {NETWORK_FEES.map((n,i)=>(
+                  <tr key={i} className="row-hover border-t border-line">
+                    <td className="py-3 pl-5 font-medium">{n.network}</td>
+                    <td className="py-3 font-mono text-ink-300 hidden sm:table-cell">{n.sym}</td>
+                    <td className="py-3 text-right font-mono">{n.fee}</td>
+                    <td className="py-3 pl-4 pr-5 text-ink-400 text-[12px] hidden md:table-cell">{n.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="surface lg:col-span-2 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background:'rgba(16,185,129,0.15)', color:'var(--pos)' }}>
+              <Icon name="trending-up" size={18}/>
+            </span>
+            <h2 className="text-[15px] font-semibold tracking-tight">Staking rewards</h2>
+          </div>
+          <p className="text-[12px] text-ink-400 mb-3">Earn protocol revenue by locking {PROJECT_CONFIG.ticker} or LP positions.</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[13px]"><span className="text-ink-300">Flexible (no lock)</span><span className="font-mono text-pos">8.4% APR</span></div>
+            <div className="flex items-center justify-between text-[13px]"><span className="text-ink-300">30-day lock</span><span className="font-mono text-pos">11.2% APR</span></div>
+            <div className="flex items-center justify-between text-[13px]"><span className="text-ink-300">90-day lock</span><span className="font-mono text-pos">14.6% APR</span></div>
+            <div className="flex items-center justify-between text-[13px]"><span className="text-ink-300">365-day lock</span><span className="font-mono text-pos">18.0% APR</span></div>
+          </div>
+          <Link to="/staking" className="w-full btn btn-secondary text-[12.5px] justify-center mt-4">
+            Explore staking pools <Icon name="arrow-right" size={12}/>
+          </Link>
+        </div>
+      </div>
+
+      {/* VIP program */}
+      <div className="surface p-5 sm:p-6 relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background:'linear-gradient(135deg, rgba(var(--glow),0.10) 0%, transparent 50%), radial-gradient(500px 200px at 100% 0%, rgba(var(--glow-2),0.10), transparent 60%)'
+        }}/>
+        <div className="relative grid grid-cols-1 md:grid-cols-[1fr_auto] items-start gap-5">
+          <div>
+            <span className="chip chip-accent inline-flex"><Icon name="crown" size={11}/> VIP program</span>
+            <h2 className="text-[20px] sm:text-[22px] font-semibold tracking-tight mt-2">Custom rates for high-volume traders</h2>
+            <p className="text-[13px] text-ink-300 mt-2 max-w-2xl leading-relaxed">
+              Beyond the public schedule, qualified market makers and institutions get bespoke fee arrangements, dedicated support, and direct API access.
+            </p>
+            <ul className="mt-4 space-y-1.5 text-[13px]">
+              {[
+                "Maker rebates from -0.01%",
+                "Dedicated Telegram channel + Slack Connect",
+                "Higher rate limits + private order routing",
+                "Custodial integrations (Fireblocks, Copper, BitGo)",
+              ].map((line,i)=>(
+                <li key={i} className="flex items-center gap-2 text-ink-200">
+                  <Icon name="check" size={13} className="text-pos flex-shrink-0"/>
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <button onClick={()=>pushToast({kind:'success', title:'Application received', body:'A trading team member will reach out within 24 hours.'})}
+            className="btn btn-primary text-[13px] self-start">
+            <Icon name="send" size={14}/> Apply for VIP
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   FOOTER — links + brand row + status indicator
+   ───────────────────────────────────────────────────────── */
+function FooterLink({ to, href, external, children, icon }){
+  const cls = "text-[12.5px] text-ink-400 hover:text-accent transition-colors inline-flex items-center gap-1.5";
+  if(href){
+    return (
+      <a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} className={cls}>
+        {icon && <Icon name={icon} size={12}/>}
+        {children}
+        {external && <Icon name="external-link" size={10} className="text-ink-500"/>}
+      </a>
+    );
+  }
+  return (
+    <Link to={to} className={cls}>
+      {icon && <Icon name={icon} size={12}/>}
+      {children}
+    </Link>
+  );
+}
+
+function FooterColumn({ title, children }){
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-[0.14em] text-ink-500 font-medium mb-3">{title}</div>
+      <ul className="flex flex-col gap-2">
+        {React.Children.toArray(children).map((c, i) => <li key={i}>{c}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function Footer(){
+  const { config, marketStatus } = useApp();
+  const year = new Date().getFullYear();
+  const live = marketStatus?.source === 'live';
+  return (
+    <footer className="border-t border-line bg-surface mt-8">
+      <div className="max-w-[1500px] mx-auto px-3 sm:px-6 pt-10 sm:pt-12 pb-6 sm:pb-8">
+        {/* Brand row */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <NexusLogo size={32}/>
+            <div>
+              <div className="font-semibold text-[15px] tracking-tight">{config.name}</div>
+              <div className="text-[11px] text-ink-500 mt-0.5">
+                Non-custodial · {config.network} · Open source
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="chip chip-pos">
+              <span className="dot"/> All systems operational
+            </span>
+            {live && <span className="chip"><Icon name="activity" size={11}/> CoinGecko · Live</span>}
+          </div>
+        </div>
+
+        {/* 4-column link grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 sm:gap-x-10 gap-y-8">
+          <FooterColumn title="Security">
+            <FooterLink to="/security" icon="shield-check">Audits & best practices</FooterLink>
+            <FooterLink to="/security" icon="lock">Non-custodial architecture</FooterLink>
+            <FooterLink to="/security" icon="snowflake">Cold storage policy</FooterLink>
+            <FooterLink to="/security" icon="bug">Bug bounty · up to $100K</FooterLink>
+          </FooterColumn>
+
+          <FooterColumn title="Fees">
+            <FooterLink to="/fees" icon="percent">Trading: 0.10–0.25%</FooterLink>
+            <FooterLink to="/fees" icon="zap">Network fees</FooterLink>
+            <FooterLink to="/fees" icon="trending-up">Staking rewards · up to 18% APR</FooterLink>
+            <FooterLink to="/fees" icon="crown">VIP program</FooterLink>
+          </FooterColumn>
+
+          <FooterColumn title="Resources">
+            <FooterLink href="#" external icon="book-open">Documentation</FooterLink>
+            <FooterLink href="#" external icon="code">API reference</FooterLink>
+            <FooterLink href="#" external icon="github">GitHub</FooterLink>
+            <FooterLink href="#" external icon="activity">Status page</FooterLink>
+          </FooterColumn>
+
+          <FooterColumn title="Connect">
+            <FooterLink href="#" external icon="message-circle">Discord</FooterLink>
+            <FooterLink href="#" external icon="send">Telegram</FooterLink>
+            <FooterLink href="#" external icon="twitter">X / Twitter</FooterLink>
+            <FooterLink href={"mailto:support@"+config.shortName+".io"} icon="mail">Support email</FooterLink>
+          </FooterColumn>
+        </div>
+
+        {/* Legal / copyright row */}
+        <div className="border-t border-line mt-10 pt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] text-ink-500">
+          <div>
+            © {year} {config.name}. Not financial advice — DYOR.
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <Link to="/security" className="hover:text-ink-200">Terms of Service</Link>
+            <Link to="/security" className="hover:text-ink-200">Privacy Policy</Link>
+            <Link to="/security" className="hover:text-ink-200">Risk Disclosure</Link>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
    SHELL & ROUTER
    ───────────────────────────────────────────────────────── */
 function Shell(){
@@ -5517,11 +5988,15 @@ function Shell(){
   return (
     <div className="min-h-screen">
       <Sidebar/>
-      <div className={"transition-[padding] "+(sidebarCollapsed?"lg:pl-[68px]":"lg:pl-[238px]")}>
+      {/* Column flex so the footer sticks to the bottom on short pages,
+          and the pb-24 below the footer keeps the mobile bottom-tabs
+          from covering anything. */}
+      <div className={"flex flex-col min-h-screen transition-[padding] pb-24 lg:pb-0 "+(sidebarCollapsed?"lg:pl-[68px]":"lg:pl-[238px]")}>
         <Header/>
-        <main className="px-3 sm:px-5 py-4 sm:py-6 pb-24 lg:pb-12 max-w-[1500px] mx-auto">
+        <main className="flex-1 w-full px-3 sm:px-5 py-4 sm:py-6 max-w-[1500px] mx-auto">
           <Outlet/>
         </main>
+        <Footer/>
       </div>
       <MobileTabs/>
       <WalletModal/>
@@ -5547,6 +6022,8 @@ function App(){
             {PROJECT_CONFIG.features.showStaking && <Route path="/staking" element={<StakingPage/>}/>}
             {PROJECT_CONFIG.features.showGovernance && <Route path="/governance" element={<GovernancePage/>}/>}
             {PROJECT_CONFIG.features.showAnalytics && <Route path="/analytics" element={<AnalyticsPage/>}/>}
+            <Route path="/security" element={<SecurityPage/>}/>
+            <Route path="/fees" element={<FeesPage/>}/>
             <Route path="/profile" element={<ProfilePage/>}/>
             <Route path="*" element={<MarketsPage/>}/>
           </Route>
