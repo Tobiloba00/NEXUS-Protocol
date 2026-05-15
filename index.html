@@ -29,6 +29,10 @@
 <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
 
 <script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
+
+<!-- TradingView Lightweight Charts — candlestick widget on the Analytics page -->
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
 <script>
@@ -762,6 +766,80 @@ async function fetchMarketData(){
     return null;
   }
 }
+
+/* ─────────────────────────────────────────────────────────
+   OHLC + volume — for the TradingView candlestick widget on
+   the Analytics page. CoinGecko serves both, with the volume
+   feed on a separate endpoint (market_chart). We aggregate the
+   volume series into the OHLC time buckets so the histogram
+   below the candles lines up neatly.
+   ───────────────────────────────────────────────────────── */
+async function fetchOhlc(coinId, days){
+  try {
+    const url = `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coinId)}/ohlc?vs_currency=usd&days=${days}`;
+    const res = await fetch(url, { headers: { accept: 'application/json' } });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    if(!Array.isArray(data)) throw new Error('unexpected payload');
+    return data; // [[ts_ms, open, high, low, close], ...]
+  } catch (e) {
+    console.warn('[NEXUS] OHLC fetch failed:', e?.message || e);
+    return null;
+  }
+}
+
+async function fetchOhlcVolumes(coinId, days){
+  try {
+    const url = `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coinId)}/market_chart?vs_currency=usd&days=${days}`;
+    const res = await fetch(url, { headers: { accept: 'application/json' } });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    return Array.isArray(data?.total_volumes) ? data.total_volumes : null;
+  } catch (e) {
+    console.warn('[NEXUS] volume fetch failed:', e?.message || e);
+    return null;
+  }
+}
+
+/* Aggregate raw volume samples into the OHLC time buckets so the
+   histogram below the candles aligns visually. Volume color is
+   green/red mirroring the candle direction. */
+function alignVolumesToCandles(candles, volumes){
+  if(!candles?.length || !volumes?.length) return [];
+  const out = [];
+  let vi = 0;
+  for(let i = 0; i < candles.length; i++){
+    const c = candles[i];
+    const next = i < candles.length - 1 ? candles[i+1].time : Infinity;
+    let sum = 0;
+    while(vi < volumes.length && Math.floor(volumes[vi][0]/1000) < next){
+      sum += Number(volumes[vi][1]) || 0;
+      vi++;
+    }
+    const isUp = c.close >= c.open;
+    out.push({
+      time: c.time,
+      value: sum,
+      color: isUp ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)',
+    });
+  }
+  return out;
+}
+
+const TV_TIMEFRAMES = [
+  { label: '1D',  days: 1   },
+  { label: '7D',  days: 7   },
+  { label: '30D', days: 30  },
+  { label: '90D', days: 90  },
+  { label: '1Y',  days: 365 },
+];
+
+const TV_COINS = [
+  { id: 'bitcoin',   symbol: 'BTC' },
+  { id: 'ethereum',  symbol: 'ETH' },
+  { id: 'solana',    symbol: 'SOL' },
+  { id: 'binancecoin', symbol: 'BNB' },
+];
 
 const NFT_NAMES = [
   "Once a Dreamer","Sacred Memory","Echoes of Twilight","Borrowed Light",
@@ -4569,6 +4647,276 @@ function Treasury(){
 /* ─────────────────────────────────────────────────────────
    ANALYTICS
    ───────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   TRADINGVIEW LIGHTWEIGHT CHARTS — real OHLC + volume widget.
+   Mounts once, accepts coin/days props for re-fetching. Reads
+   theme colors from CSS vars and re-creates the chart when the
+   theme changes so light/dark stays correct. ResizeObserver
+   keeps it sized to its container.
+   ───────────────────────────────────────────────────────── */
+function TradingViewChart(){
+  const { theme } = useApp();
+  const containerRef = useRef(null);
+  const chartRef = useRef(null);
+  const candleRef = useRef(null);
+  const volRef = useRef(null);
+
+  const [coin, setCoin] = useState(TV_COINS[0]);
+  const [days, setDays] = useState(30);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [hover, setHover] = useState(null);
+  const [lastCandle, setLastCandle] = useState(null);
+  const [stats, setStats] = useState({ change: 0, high: 0, low: 0, vol: 0 });
+
+  // (Re-)create the chart whenever the resolved theme flips
+  useEffect(()=>{
+    const LWC = window.LightweightCharts;
+    if(!LWC){
+      setError('Lightweight Charts library failed to load');
+      return;
+    }
+    if(!containerRef.current) return;
+
+    const styles = getComputedStyle(document.documentElement);
+    const ink300 = styles.getPropertyValue('--ink-300').trim() || '#9aa3b8';
+    const ink500 = styles.getPropertyValue('--ink-500').trim() || '#5b6478';
+    const gridLine = styles.getPropertyValue('--chart-grid').trim() || 'rgba(255,255,255,0.05)';
+
+    const chart = LWC.createChart(containerRef.current, {
+      width: containerRef.current.clientWidth,
+      height: containerRef.current.clientHeight,
+      layout: {
+        background: { type: 'solid', color: 'transparent' },
+        textColor: ink300,
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: gridLine },
+        horzLines: { color: gridLine },
+      },
+      crosshair: {
+        mode: LWC.CrosshairMode.Normal,
+        vertLine: { color: 'rgba(139,92,246,0.45)', width: 1, style: 0, labelBackgroundColor: '#8b5cf6' },
+        horzLine: { color: 'rgba(139,92,246,0.45)', width: 1, style: 0, labelBackgroundColor: '#8b5cf6' },
+      },
+      timeScale: {
+        borderColor: gridLine,
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 4,
+      },
+      rightPriceScale: {
+        borderColor: gridLine,
+        scaleMargins: { top: 0.08, bottom: 0.28 },
+      },
+      autoSize: false,
+    });
+    chartRef.current = chart;
+
+    const candle = chart.addCandlestickSeries({
+      upColor:         '#10b981',
+      downColor:       '#ef4444',
+      borderUpColor:   '#10b981',
+      borderDownColor: '#ef4444',
+      wickUpColor:     '#10b981',
+      wickDownColor:   '#ef4444',
+      priceLineColor:  'rgba(139,92,246,0.4)',
+      priceLineStyle:  2,
+    });
+    candleRef.current = candle;
+
+    const vol = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+    });
+    vol.priceScale().applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+    volRef.current = vol;
+
+    // Crosshair → drive the OHLC strip above the chart
+    chart.subscribeCrosshairMove(param => {
+      if(!param?.time || !param?.seriesData?.size){
+        setHover(null);
+        return;
+      }
+      const c = param.seriesData.get(candle);
+      const v = param.seriesData.get(vol);
+      if(c) setHover({ ...c, volume: v?.value });
+    });
+
+    // Keep chart sized to its container
+    const ro = new ResizeObserver(entries => {
+      for(const entry of entries){
+        const { width, height } = entry.contentRect;
+        if(width > 0 && height > 0){
+          chart.applyOptions({ width, height });
+        }
+      }
+    });
+    ro.observe(containerRef.current);
+
+    return () => {
+      ro.disconnect();
+      try { chart.remove(); } catch(_){}
+      chartRef.current = null;
+      candleRef.current = null;
+      volRef.current = null;
+    };
+  }, [theme?.resolved]);
+
+  // Load OHLC + volume on coin/timeframe change
+  useEffect(()=>{
+    if(!candleRef.current || !volRef.current) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      fetchOhlc(coin.id, days),
+      fetchOhlcVolumes(coin.id, days),
+    ]).then(([ohlc, volumes]) => {
+      if(cancelled) return;
+      if(!ohlc || ohlc.length === 0){
+        setError('No OHLC data available for this asset/timeframe');
+        setLoading(false);
+        return;
+      }
+      const candles = ohlc.map(([t,o,h,l,c]) => ({
+        time: Math.floor(t/1000),
+        open: o, high: h, low: l, close: c,
+      }));
+      candleRef.current.setData(candles);
+
+      const aligned = alignVolumesToCandles(candles, volumes || []);
+      volRef.current.setData(aligned);
+
+      // Derive header stats
+      const first = candles[0];
+      const last  = candles[candles.length-1];
+      const highs = candles.map(c => c.high);
+      const lows  = candles.map(c => c.low);
+      const change = first ? ((last.close - first.open) / first.open) * 100 : 0;
+      setStats({
+        change,
+        high: Math.max(...highs),
+        low:  Math.min(...lows),
+        vol:  aligned.reduce((s, v) => s + v.value, 0),
+      });
+      setLastCandle(last);
+
+      chartRef.current?.timeScale().fitContent();
+      setLoading(false);
+    }).catch(e => {
+      if(!cancelled){
+        setError(e?.message || 'Failed to load chart data');
+        setLoading(false);
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [coin.id, days, theme?.resolved]);
+
+  const fmtPrice = (n) => fmt.usd(n, n < 10 ? 4 : 2);
+  const currentPrice = hover?.close ?? lastCandle?.close;
+  const changeIsUp = stats.change >= 0;
+
+  return (
+    <div className="surface p-4 sm:p-5">
+      {/* Header row: token + price + coin/timeframe selectors */}
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <TokenMark symbol={coin.symbol} size={32}/>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-[15px] font-semibold tracking-tight">{coin.symbol}/USD</h3>
+              <span className="chip chip-pos text-[10px]"><span className="dot"/> CoinGecko</span>
+              <span className="chip text-[10px]">TradingView</span>
+            </div>
+            {currentPrice != null && (
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-[22px] font-semibold tnum num text-glow">{fmtPrice(currentPrice)}</span>
+                {!hover && (
+                  <span className={"text-[12px] tnum "+(changeIsUp?"text-pos":"text-neg")}>
+                    {fmt.pct(stats.change, 2)}
+                  </span>
+                )}
+                <span className="text-[10px] text-ink-500 uppercase tracking-wider">
+                  {TV_TIMEFRAMES.find(t=>t.days===days)?.label}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={coin.id} onChange={e=>setCoin(TV_COINS.find(c=>c.id===e.target.value)||TV_COINS[0])}
+            className="bg-bg border border-line rounded-lg px-2.5 h-9 text-[12px] focus:outline-none focus:border-line-2 cursor-pointer">
+            {TV_COINS.map(c => <option key={c.id} value={c.id}>{c.symbol}</option>)}
+          </select>
+          <div className="flex items-center bg-bg rounded-lg p-1 border border-line">
+            {TV_TIMEFRAMES.map(t => (
+              <button key={t.label} onClick={()=>setDays(t.days)}
+                className={"px-2.5 py-1 text-[12px] rounded-md transition-colors "+(days===t.days?"bg-hover text-ink-50":"text-ink-400 hover:text-ink-200")}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* OHLCV strip — driven by crosshair hover, else summary stats */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-[11px] font-mono">
+        {hover ? (
+          <>
+            <span><span className="text-ink-500">O</span> <span className="text-ink-200">{fmtPrice(hover.open)}</span></span>
+            <span><span className="text-ink-500">H</span> <span className="text-pos">{fmtPrice(hover.high)}</span></span>
+            <span><span className="text-ink-500">L</span> <span className="text-neg">{fmtPrice(hover.low)}</span></span>
+            <span><span className="text-ink-500">C</span> <span className="text-ink-200">{fmtPrice(hover.close)}</span></span>
+            {hover.volume != null && (
+              <span><span className="text-ink-500">Vol</span> <span className="text-ink-200">${fmt.compact(hover.volume)}</span></span>
+            )}
+          </>
+        ) : (
+          <>
+            <span><span className="text-ink-500">High</span> <span className="text-ink-200">{stats.high ? fmtPrice(stats.high) : '—'}</span></span>
+            <span><span className="text-ink-500">Low</span> <span className="text-ink-200">{stats.low ? fmtPrice(stats.low) : '—'}</span></span>
+            <span><span className="text-ink-500">Volume</span> <span className="text-ink-200">{stats.vol ? '$'+fmt.compact(stats.vol) : '—'}</span></span>
+            <span className="text-ink-500">Move cursor over the chart for OHLC</span>
+          </>
+        )}
+      </div>
+
+      {/* Chart container — sized via CSS so ResizeObserver picks it up */}
+      <div className="relative w-full h-[300px] sm:h-[400px]">
+        <div ref={containerRef} className="absolute inset-0"/>
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-surface/60 backdrop-blur-sm rounded-lg z-10">
+            <div className="flex items-center gap-2 text-[12px] text-ink-300">
+              <span className="w-4 h-4 rounded-full border-2 border-ink-400 border-t-transparent animate-spin"/>
+              Loading {coin.symbol} candles…
+            </div>
+          </div>
+        )}
+        {error && !loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-surface/40 backdrop-blur-sm rounded-lg z-10">
+            <div className="text-center max-w-xs px-4">
+              <Icon name="alert-triangle" size={20} className="text-warn inline-flex mb-2"/>
+              <div className="text-[13px] text-ink-200">{error}</div>
+              <div className="text-[11px] text-ink-500 mt-1">CoinGecko free tier rate-limits at ~30 req/min — try again in a moment.</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer note — tiny attribution + spec reminder */}
+      <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-line text-[10px] text-ink-500">
+        <span>Candlestick + volume · OHLC via CoinGecko</span>
+        <span>Powered by <span className="text-ink-300">TradingView Lightweight Charts</span></span>
+      </div>
+    </div>
+  );
+}
+
 function AnalyticsPage(){
   const [tf, setTf] = useState("30D");
   const series = useMemo(()=>{
@@ -4612,42 +4960,10 @@ function AnalyticsPage(){
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        <div className="surface p-4 sm:p-5 lg:col-span-2">
-          <h3 className="text-[14px] font-semibold mb-2">Price · {tf}</h3>
-          <div className="h-56 sm:h-72">
-            <ResponsiveContainer>
-              <AreaChart data={series} margin={{top:8,right:8,left:0,bottom:0}}>
-                <defs>
-                  <linearGradient id="pa" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.30}/>
-                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
-                <XAxis dataKey="label" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
-                <YAxis stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v=>'$'+v.toFixed(2)} width={48}/>
-                <Tooltip formatter={(v,n)=>[fmt.usd(v,3), n]}/>
-                <Area type="monotone" dataKey="price" stroke="#8b5cf6" fill="url(#pa)" strokeWidth={1.6} isAnimationActive={false}/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="surface p-4 sm:p-5">
-          <h3 className="text-[14px] font-semibold mb-2">Volume · {tf}</h3>
-          <div className="h-56 sm:h-72">
-            <ResponsiveContainer>
-              <BarChart data={series} margin={{top:8,right:8,left:0,bottom:0}}>
-                <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
-                <XAxis dataKey="label" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
-                <YAxis stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}/>
-                <Tooltip formatter={v=>fmt.compact(v*1_000_000)}/>
-                <Bar dataKey="volume" fill="#a78bfa" radius={[3,3,0,0]} maxBarSize={14}/>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
+      {/* Real OHLC candlestick + volume via TradingView Lightweight Charts.
+          Has its own coin selector + timeframe selector, so the page-level
+          timeframe selector above only drives the heatmap / liquidity widgets. */}
+      <TradingViewChart/>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         <div className="surface p-4 sm:p-5">
