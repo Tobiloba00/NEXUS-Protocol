@@ -1152,6 +1152,142 @@ function AppProvider({ children }){
     setConfigState({ ...PROJECT_CONFIG });
   }, []);
 
+  /* ── REAL WALLET CONNECTION ──────────────────────────────
+     Wires window.ethereum / window.solana providers. Silent-
+     reconnects on mount if the user previously authorized us
+     and the wallet is still installed. */
+  const walletListenersRef = useRef(null);
+  const teardownListeners = useCallback(()=>{
+    if(walletListenersRef.current){
+      try { walletListenersRef.current(); } catch(_){}
+      walletListenersRef.current = null;
+    }
+  }, []);
+
+  const refreshWalletData = useCallback(async (w) => {
+    if(!w) return;
+    setWallet(prev => prev ? { ...prev, balanceLoading:true } : prev);
+    try {
+      const [native, txs] = await Promise.all([
+        fetchNativeBalance(w),
+        fetchWalletTxs(w, 10),
+      ]);
+      setWallet(prev => prev && prev.address === w.address
+        ? { ...prev, balance: { native }, txs, balanceLoading:false, lastSyncedAt: Date.now() }
+        : prev);
+    } catch (e) {
+      setWallet(prev => prev ? { ...prev, balanceLoading:false } : prev);
+    }
+  }, []);
+
+  const attachListeners = useCallback((w, onAddressChange, onDisconnect) => {
+    teardownListeners();
+    if(!w?.provider) return;
+    const cleanups = [];
+    if(w.adapter.chain === 'evm' && typeof w.provider.on === 'function'){
+      const onAccounts = (accs) => {
+        if(!accs || accs.length === 0) onDisconnect();
+        else if(accs[0]?.toLowerCase?.() !== w.address.toLowerCase()) onAddressChange(accs[0]);
+      };
+      const onChain = (chainIdHex) => {
+        const chainId = parseInt(chainIdHex, 16);
+        const chain = EVM_CHAINS[chainId] || { name:'Chain '+chainId, symbol:'ETH', cgId:'ethereum', explorer:null, explorerWeb:null };
+        setWallet(prev => prev ? { ...prev, chainId, chain } : prev);
+        // Re-fetch balance + txs on chain switch
+        setTimeout(()=>{
+          setWallet(prev => { if(prev) refreshWalletData({ ...prev, chainId, chain }); return prev; });
+        }, 50);
+      };
+      w.provider.on('accountsChanged', onAccounts);
+      w.provider.on('chainChanged', onChain);
+      cleanups.push(() => {
+        try { w.provider.removeListener?.('accountsChanged', onAccounts); } catch(_){}
+        try { w.provider.removeListener?.('chainChanged', onChain); } catch(_){}
+      });
+    } else if(w.adapter.chain === 'solana' && typeof w.provider.on === 'function'){
+      const onAccountChanged = (pk) => {
+        if(!pk) onDisconnect();
+        else if(pk.toString() !== w.address) onAddressChange(pk.toString());
+      };
+      const onDc = () => onDisconnect();
+      w.provider.on('accountChanged', onAccountChanged);
+      w.provider.on('disconnect', onDc);
+      cleanups.push(() => {
+        try { w.provider.off?.('accountChanged', onAccountChanged); } catch(_){}
+        try { w.provider.off?.('disconnect', onDc); } catch(_){}
+      });
+    }
+    walletListenersRef.current = () => cleanups.forEach(fn => fn());
+  }, [refreshWalletData, teardownListeners]);
+
+  const disconnectWallet = useCallback(() => {
+    teardownListeners();
+    try { wallet?.provider?.disconnect?.(); } catch(_){}
+    try { localStorage.removeItem('nexus-wallet-adapter'); } catch(_){}
+    setWallet(null);
+  }, [wallet, teardownListeners]);
+
+  const connectWallet = useCallback(async (adapter) => {
+    const w = await connectWalletAdapter(adapter); // throws on user reject
+    const enriched = { ...w, balance:{ native: 0 }, txs: [], balanceLoading: true };
+    setWallet(enriched);
+    try { localStorage.setItem('nexus-wallet-adapter', adapter.id); } catch(_){}
+    // Wire change listeners against the just-connected wallet
+    const onAddressChange = (newAddr) => {
+      const next = { ...enriched, address: newAddr };
+      setWallet(prev => prev ? next : prev);
+      refreshWalletData(next);
+    };
+    attachListeners(enriched, onAddressChange, ()=>{
+      teardownListeners();
+      try { localStorage.removeItem('nexus-wallet-adapter'); } catch(_){}
+      setWallet(null);
+    });
+    // First balance + tx sync (async, doesn't block close-modal flow)
+    refreshWalletData(enriched);
+    return enriched;
+  }, [attachListeners, refreshWalletData, teardownListeners]);
+
+  // Silent-reconnect on mount if we have a saved adapter
+  useEffect(()=>{
+    let cancelled = false;
+    (async () => {
+      let savedId = null;
+      try { savedId = localStorage.getItem('nexus-wallet-adapter'); } catch(_){}
+      if(!savedId) return;
+      // Wait for the wallet's window.* injection (extensions race React on first paint)
+      await new Promise(r => setTimeout(r, 300));
+      const w = await silentReconnect(savedId);
+      if(cancelled || !w) return;
+      const enriched = { ...w, balance:{ native: 0 }, txs: [], balanceLoading: true };
+      setWallet(enriched);
+      attachListeners(enriched,
+        (newAddr) => {
+          const next = { ...enriched, address: newAddr };
+          setWallet(prev => prev ? next : prev);
+          refreshWalletData(next);
+        },
+        () => {
+          teardownListeners();
+          try { localStorage.removeItem('nexus-wallet-adapter'); } catch(_){}
+          setWallet(null);
+        }
+      );
+      refreshWalletData(enriched);
+    })();
+    return () => { cancelled = true; };
+  }, []); // run once
+
+  // Refresh balance + tx every 30s while connected
+  useEffect(()=>{
+    if(!wallet) return;
+    const id = setInterval(()=> refreshWalletData(wallet), 30_000);
+    return () => clearInterval(id);
+  }, [wallet?.address, wallet?.chainId, refreshWalletData]);
+
+  // Cleanup any lingering listeners on unmount
+  useEffect(()=> teardownListeners, [teardownListeners]);
+
   const resetConfig = useCallback(() => {
     // Wipe storage and reload PROJECT_CONFIG from the NEXUS preset
     try { localStorage.removeItem('nexus-config'); } catch(_){}
@@ -1280,6 +1416,7 @@ function AppProvider({ children }){
   return (
     <AppCtx.Provider value={{
       wallet, setWallet,
+      connectWallet, disconnectWallet,
       showWallet, setShowWallet,
       showSearch, setShowSearch,
       showSidebar, setShowSidebar,
@@ -1645,7 +1782,7 @@ function Header(){
         </button>
       ) : (
         <button onClick={()=>setShowWallet(true)} className="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-full border border-line-2 bg-surface hover:bg-hover transition-all duration-200 hover:shadow-[0_0_22px_-4px_rgba(var(--glow),0.45)]">
-          <span className="halo rounded-full"><Identicon seed={wallet.seed} size={28}/></span>
+          <span className="halo rounded-full"><Identicon seed={wallet.address} size={28}/></span>
           <span className="hidden sm:inline font-mono text-[13px]">{fmt.short(wallet.address, 4, 4)}</span>
           <Icon name="chevron-down" size={14} className="text-ink-400"/>
         </button>
@@ -1764,84 +1901,375 @@ function Modal({ open, onClose, title, children, size="md" }){
 /* ─────────────────────────────────────────────────────────
    WALLET MODAL
    ───────────────────────────────────────────────────────── */
-const WALLETS = [
-  { id:'phantom',       label:'Phantom',        desc:'Solana, Ethereum & Bitcoin',     color:'#ab9ff2' },
-  { id:'solflare',      label:'Solflare',       desc:'Native Solana wallet',           color:'#fbbf24' },
-  { id:'backpack',      label:'Backpack',       desc:'xNFT-native multi-chain',        color:'#f87171' },
-  { id:'walletconnect', label:'WalletConnect',  desc:'Scan with mobile wallet',        color:'#3b82f6' },
-  { id:'metamask',      label:'MetaMask',       desc:'Most popular EVM wallet',        color:'#fb923c' },
-  { id:'ledger',        label:'Ledger',         desc:'Hardware wallet',                color:'#9aa3b3' },
+/* ─────────────────────────────────────────────────────────
+   REAL WALLET ADAPTERS — talks to actual browser extensions
+   via window.ethereum / window.solana. No bundler needed.
+   ───────────────────────────────────────────────────────── */
+
+const EVM_CHAINS = {
+  1:     { name: 'Ethereum',        symbol: 'ETH',  cgId: 'ethereum',     explorer: 'https://api.etherscan.io/api',           explorerWeb: 'https://etherscan.io' },
+  10:    { name: 'Optimism',        symbol: 'ETH',  cgId: 'ethereum',     explorer: 'https://api-optimistic.etherscan.io/api',explorerWeb: 'https://optimistic.etherscan.io' },
+  56:    { name: 'BNB Chain',       symbol: 'BNB',  cgId: 'binancecoin',  explorer: 'https://api.bscscan.com/api',            explorerWeb: 'https://bscscan.com' },
+  137:   { name: 'Polygon',         symbol: 'POL',  cgId: 'matic-network',explorer: 'https://api.polygonscan.com/api',        explorerWeb: 'https://polygonscan.com' },
+  8453:  { name: 'Base',            symbol: 'ETH',  cgId: 'ethereum',     explorer: 'https://api.basescan.org/api',           explorerWeb: 'https://basescan.org' },
+  42161: { name: 'Arbitrum',        symbol: 'ETH',  cgId: 'ethereum',     explorer: 'https://api.arbiscan.io/api',            explorerWeb: 'https://arbiscan.io' },
+  43114: { name: 'Avalanche',       symbol: 'AVAX', cgId: 'avalanche-2',  explorer: 'https://api.snowtrace.io/api',           explorerWeb: 'https://snowtrace.io' },
+};
+const SOLANA_CHAIN_INFO = { name: 'Solana', symbol: 'SOL', cgId: 'solana', explorerWeb: 'https://solscan.io' };
+
+/* Pick the right injected EVM provider when multiple are installed.
+   EIP-5749 / EIP-6963 multi-provider injection happens by stacking on
+   window.ethereum.providers. We filter that array, falling back to
+   window.ethereum directly. */
+function pickEvmProvider(predicate){
+  if(!window.ethereum) return null;
+  if(Array.isArray(window.ethereum.providers)){
+    const match = window.ethereum.providers.find(predicate);
+    if(match) return match;
+  }
+  return predicate(window.ethereum) ? window.ethereum : window.ethereum;
+}
+
+const WALLET_ADAPTERS = [
+  {
+    id:'metamask', label:'MetaMask', desc:'Most popular EVM wallet',
+    color:'#fb923c', chain:'evm', installUrl:'https://metamask.io/download/',
+    detect:    () => !!window.ethereum && (window.ethereum.isMetaMask || (window.ethereum.providers||[]).some(p=>p.isMetaMask)),
+    getProvider: () => pickEvmProvider(p => p.isMetaMask),
+  },
+  {
+    id:'phantom', label:'Phantom', desc:'Solana, Ethereum & Bitcoin',
+    color:'#ab9ff2', chain:'solana', installUrl:'https://phantom.app/',
+    detect:    () => !!(window.phantom?.solana?.isPhantom || window.solana?.isPhantom),
+    getProvider: () => window.phantom?.solana || window.solana,
+  },
+  {
+    id:'coinbase', label:'Coinbase Wallet', desc:'Self-custody by Coinbase',
+    color:'#3b82f6', chain:'evm', installUrl:'https://www.coinbase.com/wallet/downloads',
+    detect:    () => !!(window.coinbaseWalletExtension || (window.ethereum?.isCoinbaseWallet) || (window.ethereum?.providers||[]).some(p=>p.isCoinbaseWallet)),
+    getProvider: () => window.coinbaseWalletExtension || pickEvmProvider(p => p.isCoinbaseWallet),
+  },
+  {
+    id:'solflare', label:'Solflare', desc:'Native Solana wallet',
+    color:'#fbbf24', chain:'solana', installUrl:'https://solflare.com/download',
+    detect:    () => !!window.solflare?.isSolflare,
+    getProvider: () => window.solflare,
+  },
+  {
+    id:'backpack', label:'Backpack', desc:'xNFT-native multi-chain',
+    color:'#f87171', chain:'solana', installUrl:'https://backpack.app/',
+    detect:    () => !!window.backpack?.isBackpack,
+    getProvider: () => window.backpack,
+  },
+  {
+    id:'walletconnect', label:'WalletConnect', desc:'Scan with a mobile wallet',
+    color:'#22d3ee', chain:'wc', installUrl:null,
+    detect:     () => false, // requires a cloud.walletconnect.com project ID
+    getProvider:() => null,
+    note: 'Requires WalletConnect project ID',
+  },
 ];
-function WalletGlyph({ color }){
+
+const findAdapter = (id) => WALLET_ADAPTERS.find(a => a.id === id) || null;
+
+/* Open the wallet's window provider, request the user's accounts, and
+   resolve to a normalized wallet record. Throws on user reject. */
+async function connectWalletAdapter(adapter){
+  const provider = adapter.getProvider();
+  if(!provider) throw new Error(adapter.label + ' is not installed');
+
+  if(adapter.chain === 'evm'){
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+    if(!accounts || !accounts[0]) throw new Error('No accounts returned');
+    let chainIdHex = '0x1';
+    try { chainIdHex = await provider.request({ method: 'eth_chainId' }); } catch(_){}
+    const chainId = parseInt(chainIdHex, 16);
+    const chain = EVM_CHAINS[chainId] || { name: 'Chain '+chainId, symbol: 'ETH', cgId: 'ethereum', explorer: null, explorerWeb: null };
+    return { adapter, provider, address: accounts[0], chain, chainId };
+  }
+
+  if(adapter.chain === 'solana'){
+    const resp = await provider.connect();
+    const pk = resp?.publicKey || provider.publicKey;
+    if(!pk) throw new Error('No public key returned');
+    return { adapter, provider, address: pk.toString(), chain: SOLANA_CHAIN_INFO, chainId: null };
+  }
+
+  throw new Error('Unsupported adapter chain');
+}
+
+/* Best-effort silent reconnect — only resolves if the wallet still
+   considers the site permissioned (no user popup). */
+async function silentReconnect(adapterId){
+  const adapter = findAdapter(adapterId);
+  if(!adapter || adapter.chain === 'wc' || !adapter.detect()) return null;
+  const provider = adapter.getProvider();
+  if(!provider) return null;
+  try {
+    if(adapter.chain === 'evm'){
+      const accounts = await provider.request({ method: 'eth_accounts' });
+      if(!accounts || !accounts[0]) return null;
+      let chainIdHex = '0x1';
+      try { chainIdHex = await provider.request({ method: 'eth_chainId' }); } catch(_){}
+      const chainId = parseInt(chainIdHex, 16);
+      const chain = EVM_CHAINS[chainId] || { name: 'Chain '+chainId, symbol: 'ETH', cgId: 'ethereum', explorer: null, explorerWeb: null };
+      return { adapter, provider, address: accounts[0], chain, chainId };
+    }
+    if(adapter.chain === 'solana'){
+      // Phantom/Solflare expose connect({ onlyIfTrusted: true }) for silent
+      const resp = await provider.connect({ onlyIfTrusted: true });
+      const pk = resp?.publicKey || provider.publicKey;
+      if(!pk) return null;
+      return { adapter, provider, address: pk.toString(), chain: SOLANA_CHAIN_INFO, chainId: null };
+    }
+  } catch(_){ /* silent reconnect can legitimately fail — user revoked */ }
+  return null;
+}
+
+/* Native balance fetch. EVM uses eth_getBalance directly off the
+   provider so we don't need to know the RPC endpoint. Solana hits
+   the public mainnet RPC. Returns a number in native units (ETH/SOL/etc.). */
+async function fetchNativeBalance(w){
+  try {
+    if(w.adapter.chain === 'evm'){
+      const hex = await w.provider.request({ method: 'eth_getBalance', params: [w.address, 'latest'] });
+      return parseInt(hex, 16) / 1e18;
+    }
+    if(w.adapter.chain === 'solana'){
+      const res = await fetch(SOLANA_RPC, {
+        method:'POST', headers:{ 'content-type':'application/json' },
+        body: JSON.stringify({ jsonrpc:'2.0', id:1, method:'getBalance', params:[w.address] }),
+      });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      return (data?.result?.value || 0) / 1e9;
+    }
+  } catch (e) {
+    console.warn('[NEXUS] balance fetch failed:', e?.message || e);
+  }
+  return 0;
+}
+
+/* Solana SPL token accounts — returns the wallet's holdings of every
+   token with a positive balance. Used to populate the Profile page. */
+async function fetchSolanaSplTokens(address){
+  try {
+    const res = await fetch(SOLANA_RPC, {
+      method:'POST', headers:{ 'content-type':'application/json' },
+      body: JSON.stringify({
+        jsonrpc:'2.0', id:1, method:'getTokenAccountsByOwner',
+        params:[ address, { programId: SPL_TOKEN_PROGRAM }, { encoding: 'jsonParsed' } ],
+      }),
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const rows = data?.result?.value || [];
+    return rows.map(r => {
+      const info = r?.account?.data?.parsed?.info;
+      const ui = info?.tokenAmount?.uiAmount;
+      return {
+        mint:    info?.mint,
+        amount:  ui,
+        decimals:info?.tokenAmount?.decimals,
+      };
+    }).filter(t => t.mint && (t.amount||0) > 0);
+  } catch (e) {
+    console.warn('[NEXUS] SPL token fetch failed:', e?.message || e);
+    return [];
+  }
+}
+
+/* Recent transactions for either chain family. EVM uses the explorer
+   family's free /api?module=account&action=txlist endpoint (rate-
+   limited without a key — fine for a single load). Solana uses RPC. */
+async function fetchWalletTxs(w, limit = 10){
+  try {
+    if(w.adapter.chain === 'evm'){
+      if(!w.chain?.explorer) return [];
+      const url = `${w.chain.explorer}?module=account&action=txlist&address=${w.address}&page=1&offset=${limit}&sort=desc`;
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      const rows = Array.isArray(data?.result) ? data.result : [];
+      return rows.map(t => ({
+        id:    t.hash,
+        hash:  t.hash,
+        from:  t.from,
+        to:    t.to,
+        value: Number(t.value || 0) / 1e18,
+        ts:    Number(t.timeStamp || 0) * 1000,
+        kind:  String(t.from || '').toLowerCase() === w.address.toLowerCase() ? 'Send' : 'Receive',
+        isErr: t.isError === '1',
+        explorer: w.chain.explorerWeb ? `${w.chain.explorerWeb}/tx/${t.hash}` : null,
+      }));
+    }
+    if(w.adapter.chain === 'solana'){
+      const res = await fetch(SOLANA_RPC, {
+        method:'POST', headers:{ 'content-type':'application/json' },
+        body: JSON.stringify({ jsonrpc:'2.0', id:1, method:'getSignaturesForAddress', params:[w.address, { limit }] }),
+      });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      const rows = Array.isArray(data?.result) ? data.result : [];
+      return rows.map(s => ({
+        id:    s.signature,
+        hash:  s.signature,
+        ts:    (s.blockTime || Math.floor(Date.now()/1000)) * 1000,
+        kind:  s.err ? 'Failed' : 'Transfer',
+        isErr: !!s.err,
+        explorer: `https://solscan.io/tx/${s.signature}`,
+      }));
+    }
+  } catch (e) {
+    console.warn('[NEXUS] tx history fetch failed:', e?.message || e);
+  }
+  return [];
+}
+
+function WalletGlyph({ color, label }){
+  const initials = (label || '?').slice(0,1).toUpperCase();
   return (
-    <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg" style={{ background: color+'1f', border:'1px solid '+color+'40' }}>
-      <span className="w-3.5 h-3.5 rounded-sm" style={{ background: color }}/>
+    <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg flex-shrink-0 text-white font-semibold text-[13px]"
+      style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)`, boxShadow:`inset 0 1px 0 rgba(255,255,255,0.20)` }}>
+      {initials}
     </span>
   );
 }
 
 function WalletModal(){
-  const { showWallet, setShowWallet, wallet, setWallet, pushToast } = useApp();
+  const { showWallet, setShowWallet, wallet, setWallet, connectWallet, disconnectWallet, tokens, pushToast } = useApp();
   const [connecting, setConnecting] = useState(null);
+  const [error, setError] = useState(null);
   if(!showWallet) return null;
 
-  const connect = (opt) => {
-    setConnecting(opt.id);
-    setTimeout(()=>{
-      const seed = Date.now() & 0xffff;
-      const w = { provider: opt, address: networkAddr(seed), balance: parseFloat((1.2 + Math.random()*8).toFixed(3)), seed };
-      setWallet(w);
-      setConnecting(null);
+  /* Re-detect on every render so a freshly installed extension shows up
+     after the user clicks "Install" and comes back. */
+  const adapterRows = WALLET_ADAPTERS.map(a => ({ ...a, installed: a.detect() }));
+
+  const onConnect = async (adapter) => {
+    setError(null);
+    if(!adapter.detect()){
+      if(adapter.installUrl) window.open(adapter.installUrl, '_blank', 'noopener');
+      else setError(adapter.note || `${adapter.label} not available`);
+      return;
+    }
+    setConnecting(adapter.id);
+    try {
+      await connectWallet(adapter);
       setShowWallet(false);
-      pushToast({ kind:'success', title:'Connected', body: opt.label+' · '+fmt.short(w.address,5,4) });
-    }, 900);
+      pushToast({ kind:'success', title:'Wallet connected', body: adapter.label });
+    } catch (e) {
+      const msg = e?.message || 'Connection rejected';
+      setError(msg);
+      pushToast({ kind:'error', title:'Connection failed', body: msg });
+    } finally {
+      setConnecting(null);
+    }
   };
+
+  const onDisconnect = () => {
+    disconnectWallet();
+    setShowWallet(false);
+    pushToast({ kind:'info', title:'Disconnected' });
+  };
+
+  // Live USD value for the native balance (cross-ref CoinGecko data we already pull)
+  const usdPerNative = wallet?.chain?.cgId
+    ? (tokens.find(t => (t.id||'').toLowerCase() === wallet.chain.cgId)?.price || 0)
+    : 0;
+  const nativeBalance = wallet?.balance?.native ?? 0;
+  const balanceUsd = nativeBalance * usdPerNative;
 
   return (
     <Modal open onClose={()=>setShowWallet(false)} title={wallet?"Wallet":"Connect a wallet"} size="md">
       {wallet ? (
         <div className="space-y-3">
+          {/* Address row with copy + explorer link */}
           <div className="surface px-4 py-3 flex items-center gap-3">
-            <Identicon seed={wallet.seed} size={36}/>
+            <Identicon seed={wallet.address} size={36}/>
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] text-ink-400">{wallet.provider.label}</div>
+              <div className="text-[11px] text-ink-400 flex items-center gap-1.5">
+                {wallet.adapter.label}
+                <span className="chip chip-pos text-[9px]"><span className="dot"/> Live</span>
+              </div>
               <div className="font-mono text-[13px] truncate">{fmt.short(wallet.address, 8, 8)}</div>
             </div>
-            <button onClick={()=>{ navigator.clipboard?.writeText(wallet.address); pushToast({kind:'success',title:'Address copied'}); }} className="btn btn-secondary btn-icon" aria-label="Copy">
+            <button onClick={()=>{ navigator.clipboard?.writeText(wallet.address); pushToast({kind:'success',title:'Address copied'}); }}
+              className="btn btn-secondary btn-icon" aria-label="Copy address">
               <Icon name="copy" size={14}/>
             </button>
+            {wallet.chain?.explorerWeb && (
+              <a href={`${wallet.chain.explorerWeb}/address/${wallet.address}`} target="_blank" rel="noreferrer"
+                className="btn btn-secondary btn-icon" aria-label="Open in explorer">
+                <Icon name="external-link" size={14}/>
+              </a>
+            )}
           </div>
+
+          {/* Chain / balance */}
           <div className="grid grid-cols-2 gap-2.5">
             <div className="surface px-3 py-2.5">
-              <div className="text-[11px] text-ink-400">Balance</div>
-              <div className="font-mono text-[15px] mt-0.5">{wallet.balance.toFixed(3)} SOL</div>
+              <div className="text-[11px] text-ink-400">Network</div>
+              <div className="font-mono text-[15px] mt-0.5 truncate">{wallet.chain?.name || '—'}</div>
             </div>
             <div className="surface px-3 py-2.5">
-              <div className="text-[11px] text-ink-400">{PROJECT_CONFIG.ticker}</div>
-              <div className="font-mono text-[15px] mt-0.5">12,401.50</div>
+              <div className="text-[11px] text-ink-400">Balance</div>
+              <div className="font-mono text-[15px] mt-0.5">
+                {nativeBalance.toFixed(nativeBalance < 1 ? 6 : 4)} <span className="text-ink-400">{wallet.chain?.symbol || ''}</span>
+              </div>
+              {balanceUsd > 0 && (
+                <div className="text-[10px] text-ink-500 mt-0.5 font-mono">≈ {fmt.usd(balanceUsd, 2)}</div>
+              )}
             </div>
           </div>
-          <button onClick={()=>{ setWallet(null); setShowWallet(false); pushToast({kind:'info',title:'Disconnected'}); }}
+
+          {wallet.balanceLoading && (
+            <div className="text-[11px] text-ink-500 text-center">Refreshing balance…</div>
+          )}
+
+          <button onClick={onDisconnect}
             className="w-full btn btn-secondary text-neg justify-center">
             <Icon name="log-out" size={14}/> Disconnect
           </button>
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-[13px] text-ink-400 mb-3">{PROJECT_CONFIG.name} doesn't store your keys. Wallets sign transactions on your device.</p>
-          {WALLETS.map(opt => (
-            <button key={opt.id} onClick={()=>connect(opt)} disabled={!!connecting}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-line hover:border-line-2 hover:bg-hover transition text-left disabled:opacity-50">
-              <WalletGlyph color={opt.color}/>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-[14px]">{opt.label}</div>
-                <div className="text-[12px] text-ink-400 truncate">{opt.desc}</div>
-              </div>
-              {connecting===opt.id ? <span className="text-[11px] text-ink-400">Connecting…</span> :
-                <Icon name="chevron-right" size={14} className="text-ink-500"/>}
-            </button>
-          ))}
-          <p className="text-[11px] text-ink-500 text-center pt-3">By connecting you agree to the Terms of Service & Privacy Policy.</p>
+          <p className="text-[13px] text-ink-400 mb-3">
+            {PROJECT_CONFIG.name} doesn't store your keys. Your wallet signs transactions on your device.
+          </p>
+          {adapterRows.map(opt => {
+            const isWc = opt.chain === 'wc';
+            const disabled = !!connecting || (isWc && !opt.installed);
+            return (
+              <button key={opt.id} onClick={()=>onConnect(opt)} disabled={disabled}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-line hover:border-line-2 hover:bg-hover transition text-left disabled:opacity-50 disabled:cursor-not-allowed">
+                <WalletGlyph color={opt.color} label={opt.label}/>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium text-[14px]">{opt.label}</div>
+                    {opt.installed && <span className="chip chip-pos text-[9px]"><span className="dot"/> Detected</span>}
+                    {!opt.installed && !isWc && <span className="chip text-[9px]">Install</span>}
+                    {isWc && <span className="chip text-[9px]">Setup needed</span>}
+                  </div>
+                  <div className="text-[12px] text-ink-400 truncate">
+                    {connecting===opt.id ? 'Awaiting approval in extension…' :
+                     isWc                ? (opt.note || opt.desc) :
+                     opt.installed        ? opt.desc :
+                                            'Click to install — opens in new tab'}
+                  </div>
+                </div>
+                {connecting===opt.id
+                  ? <span className="w-4 h-4 rounded-full border-2 border-ink-400 border-t-transparent animate-spin"/>
+                  : <Icon name={opt.installed?"chevron-right":"external-link"} size={14} className="text-ink-500"/>}
+              </button>
+            );
+          })}
+          {error && (
+            <div className="surface px-3 py-2 text-[12px] text-neg border-neg/30 border" style={{borderColor:'var(--neg)'}}>
+              {error}
+            </div>
+          )}
+          <p className="text-[11px] text-ink-500 text-center pt-3">By connecting you agree to the Terms & Privacy Policy.</p>
         </div>
       )}
     </Modal>
@@ -4369,7 +4797,7 @@ function TransactionsTable(){
    PROFILE
    ───────────────────────────────────────────────────────── */
 function ProfilePage(){
-  const { wallet, setShowWallet, pushToast } = useApp();
+  const { wallet, setShowWallet, pushToast, tokens } = useApp();
   const [tab, setTab] = useState("overview");
   const [theme, setTheme] = useState({ accent:'#4f8df9', accent2:'#22d3ee' });
   const [network, setNetwork] = useState(PROJECT_CONFIG.network);
@@ -4398,22 +4826,40 @@ function ProfilePage(){
       <div className="surface p-4 sm:p-5">
         <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex items-center gap-3">
-            <Identicon seed={wallet.seed} size={56}/>
+            <Identicon seed={wallet.address} size={56}/>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-[18px] font-semibold">Wallet</h1>
-                <span className="chip"><span className="dot"/> {wallet.provider.label}</span>
+                <span className="chip chip-pos text-[10px]"><span className="dot"/> {wallet.adapter.label}</span>
+                {wallet.chain?.name && <span className="chip text-[10px]">{wallet.chain.name}</span>}
               </div>
-              <button onClick={()=>{ navigator.clipboard?.writeText(wallet.address); pushToast({kind:'success',title:'Address copied'}); }}
-                className="font-mono text-[12px] text-ink-400 hover:text-ink-50 flex items-center gap-1.5 mt-1">
-                {fmt.short(wallet.address,8,6)} <Icon name="copy" size={11}/>
-              </button>
+              <div className="flex items-center gap-2 mt-1">
+                <button onClick={()=>{ navigator.clipboard?.writeText(wallet.address); pushToast({kind:'success',title:'Address copied'}); }}
+                  className="font-mono text-[12px] text-ink-400 hover:text-ink-50 flex items-center gap-1.5">
+                  {fmt.short(wallet.address,8,6)} <Icon name="copy" size={11}/>
+                </button>
+                {wallet.chain?.explorerWeb && (
+                  <a href={`${wallet.chain.explorerWeb}/address/${wallet.address}`} target="_blank" rel="noreferrer"
+                    className="text-[12px] text-ink-400 hover:text-ink-50 flex items-center gap-1">
+                    Explorer <Icon name="external-link" size={11}/>
+                  </a>
+                )}
+              </div>
             </div>
           </div>
           <div className="md:ml-auto md:text-right">
-            <div className="text-[10px] uppercase tracking-wider text-ink-500">Total value</div>
-            <div className="text-[24px] font-semibold tracking-tight"><CountUp value={64760} prefix="$"/></div>
-            <div className="text-[12px] text-pos">+8.4% (24h)</div>
+            <div className="text-[10px] uppercase tracking-wider text-ink-500">Native balance</div>
+            <div className="text-[24px] font-semibold tracking-tight num">
+              <CountUp value={wallet.balance?.native ?? 0} decimals={(wallet.balance?.native ?? 0) < 1 ? 6 : 4}/>
+              <span className="text-[14px] text-ink-400 ml-1">{wallet.chain?.symbol || ''}</span>
+            </div>
+            <div className="text-[12px] text-ink-400 font-mono mt-0.5">
+              {(() => {
+                const px = tokens.find(t => (t.id||'').toLowerCase() === (wallet.chain?.cgId||''))?.price || 0;
+                const usd = (wallet.balance?.native ?? 0) * px;
+                return usd > 0 ? '≈ ' + fmt.usd(usd, 2) : (wallet.balanceLoading ? 'Loading…' : '—');
+              })()}
+            </div>
           </div>
         </div>
       </div>
@@ -4486,36 +4932,72 @@ function ProfilePage(){
 
       {tab==='transactions' && (
         <div className="surface">
-          <div className="px-4 sm:px-5 py-3 border-b border-line flex items-center justify-between">
-            <h3 className="text-[14px] font-semibold">All transactions</h3>
-            <button className="text-[12px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1">
-              Export <Icon name="download" size={12}/>
-            </button>
+          <div className="px-4 sm:px-5 py-3 border-b border-line flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[14px] font-semibold">Recent on-chain transactions</h3>
+              {wallet.txs?.length > 0 && (
+                <span className="chip chip-pos text-[10px]" title={wallet.lastSyncedAt ? 'Synced '+Math.floor((Date.now()-wallet.lastSyncedAt)/1000)+'s ago' : 'Live'}>
+                  <span className="dot"/> Live
+                </span>
+              )}
+              {wallet.balanceLoading && (
+                <span className="text-[11px] text-ink-500">Loading…</span>
+              )}
+            </div>
+            <div className="text-[11px] text-ink-500">
+              From {wallet.adapter.chain === 'evm'
+                ? (wallet.chain?.name || 'Etherscan')+' API'
+                : 'Solana RPC'}
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="text-[10px] uppercase tracking-wider text-ink-500">
-                  <th className="text-left font-normal py-2 pl-4 sm:pl-5">Type</th>
-                  <th className="text-left font-normal py-2 hidden sm:table-cell">Tx hash</th>
-                  <th className="text-right font-normal py-2">Amount</th>
-                  <th className="text-right font-normal py-2 hidden md:table-cell">Value</th>
-                  <th className="text-right font-normal py-2 pr-4 sm:pr-5">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-              {Array.from({length: 12}, (_,i) => genTx(i+777)).map(tx => (
-                <tr key={tx.id} className="row-hover border-t border-line">
-                  <td className="py-2.5 pl-4 sm:pl-5 font-medium">{tx.type}</td>
-                  <td className="py-2.5 font-mono text-ink-400 hidden sm:table-cell">{tx.txHash}</td>
-                  <td className="py-2.5 text-right font-mono">{fmt.compact(tx.amount)} {tx.tokenA.symbol}</td>
-                  <td className="py-2.5 text-right font-mono text-ink-400 hidden md:table-cell">{fmt.usd(tx.usd,0)}</td>
-                  <td className="py-2.5 pr-4 sm:pr-5 text-right text-ink-500 tnum">{fmt.ago(tx.time)}</td>
-                </tr>
-              ))}
-              </tbody>
-            </table>
-          </div>
+          {(wallet.txs?.length || 0) === 0 ? (
+            <div className="py-12 text-center text-[13px] text-ink-400">
+              {wallet.balanceLoading
+                ? 'Fetching recent transactions…'
+                : 'No recent transactions for this address.'}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wider text-ink-500">
+                    <th className="text-left font-normal py-2 pl-4 sm:pl-5">Event</th>
+                    <th className="text-left font-normal py-2 hidden sm:table-cell">Tx hash</th>
+                    <th className="text-right font-normal py-2">Amount</th>
+                    <th className="text-right font-normal py-2 hidden md:table-cell">Counterparty</th>
+                    <th className="text-right font-normal py-2 pr-4 sm:pr-5">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                {wallet.txs.map(tx => {
+                  const isOut = tx.kind === 'Send';
+                  const sym = wallet.chain?.symbol || '';
+                  return (
+                    <tr key={tx.id} className="row-hover border-t border-line">
+                      <td className={"py-2.5 pl-4 sm:pl-5 font-medium "+(tx.isErr?"text-neg":isOut?"text-neg":"text-pos")}>
+                        {tx.isErr ? 'Failed' : tx.kind}
+                      </td>
+                      <td className="py-2.5 font-mono text-ink-400 hidden sm:table-cell">
+                        {tx.explorer
+                          ? <a href={tx.explorer} target="_blank" rel="noreferrer" className="hover:text-ink-50 inline-flex items-center gap-1">{fmt.short(tx.hash, 6, 6)}<Icon name="external-link" size={10}/></a>
+                          : fmt.short(tx.hash, 6, 6)}
+                      </td>
+                      <td className="py-2.5 text-right font-mono">
+                        {typeof tx.value === 'number' && tx.value > 0
+                          ? `${isOut?'−':'+'}${tx.value.toFixed(tx.value<0.001?6:4)} ${sym}`
+                          : <span className="text-ink-500">—</span>}
+                      </td>
+                      <td className="py-2.5 text-right font-mono text-ink-400 hidden md:table-cell">
+                        {tx.to || tx.from ? fmt.short(isOut ? tx.to : tx.from, 5, 4) : '—'}
+                      </td>
+                      <td className="py-2.5 pr-4 sm:pr-5 text-right text-ink-500 tnum">{tx.ts ? fmt.ago(tx.ts) : '—'}</td>
+                    </tr>
+                  );
+                })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
