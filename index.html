@@ -107,7 +107,7 @@
           neg:        'var(--neg)',
           warn:       'var(--warn)',
         },
-        borderRadius: { xl2: '14px' },
+        borderRadius: { xl2: '16px' },
       }
     }
   }
@@ -330,13 +330,13 @@
   /* Surfaces — glass 2.0 with inset top highlight */
   .surface{
     background: var(--surface);
-    border:1px solid var(--line); border-radius: 14px;
+    border:1px solid var(--line); border-radius: 16px;
     box-shadow: inset 0 1px 0 var(--inset-hi), 0 1px 2px rgba(0,0,0,0.12);
     position: relative;
   }
   .surface-2{
     background: var(--surface-2);
-    border:1px solid var(--line); border-radius: 14px;
+    border:1px solid var(--line); border-radius: 16px;
     box-shadow: inset 0 1px 0 var(--inset-hi);
   }
   .surface-hover{ transition: border-color .25s ease, transform .25s cubic-bezier(.2,.7,.3,1), box-shadow .25s ease; }
@@ -347,17 +347,25 @@
   }
 
   .glass{
-    background: color-mix(in oklab, var(--surface) 78%, transparent);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
-    backdrop-filter: blur(24px) saturate(140%);
-    border-bottom:1px solid var(--line);
-    box-shadow: inset 0 1px 0 var(--inset-hi);
+    background: color-mix(in oklab, var(--surface) 72%, transparent);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    backdrop-filter: blur(28px) saturate(160%);
+    position: relative;
+  }
+  /* Soft gradient fade below the header — replaces the old border line
+     so the header feels seamless against the page. */
+  .glass::after{
+    content:""; position:absolute; left:0; right:0; bottom:-14px; height:14px;
+    background: linear-gradient(to bottom,
+      color-mix(in oklab, var(--surface) 60%, transparent),
+      transparent);
+    pointer-events:none;
   }
 
   /* Buttons */
   .btn{
     display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
-    border-radius: 10px; font-weight:500; font-size:.875rem;
+    border-radius: 12px; font-weight:500; font-size:.875rem;
     padding: .55rem .9rem; white-space: nowrap; cursor: pointer;
     transition: background .35s ease, background-position .6s ease, color .15s ease, border-color .2s ease, box-shadow .25s ease, transform .12s ease;
   }
@@ -397,6 +405,13 @@
   .btn-ghost:hover{ background: var(--hover); color: var(--ink-50); }
   .btn-icon{ width:36px; height:36px; padding:0; }
 
+  /* Brand gradient text — used for page titles on the aggregated views */
+  .gradient-text{
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+
   /* Glow & numeric utilities (theme-aware via CSS vars) */
   .text-glow{ text-shadow: 0 0 24px rgba(var(--glow), var(--glow-text-strength, 0.45)); }
   .glow-soft{ box-shadow: 0 0 28px rgba(var(--glow), calc(var(--glow-text-strength, 0.45) * 0.5)); }
@@ -433,7 +448,7 @@
   /* Inputs */
   .input{
     width:100%; background: var(--bg); border:1px solid var(--line);
-    border-radius:10px; padding:.55rem .8rem; font-size:.875rem; color: var(--ink-50);
+    border-radius:12px; padding:.55rem .8rem; font-size:.875rem; color: var(--ink-50);
     transition: border-color .15s ease, background-color .15s ease;
   }
   .input:focus{ outline:none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--primary-soft); }
@@ -458,7 +473,7 @@
   .recharts-default-tooltip{
     background: var(--tooltip-bg) !important;
     border:1px solid var(--tooltip-bd) !important;
-    border-radius:10px !important;
+    border-radius:12px !important;
     padding:8px 10px !important;
     box-shadow: var(--shadow-lg);
   }
@@ -1155,14 +1170,11 @@ async function fetchRecentActivity(){
 }
 
 async function fetchNFTCollections(){
-  /* The collections state used by <FeaturedCollections> is now
-     populated by the multi-source NFT aggregator (Magic Eden +
-     Reservoir + Tensor) defined below. We map the unified shape
-     back to the legacy field names (floor/volume) for backwards
-     compat with the existing UI, while passing the new fields
-     (platform, source, chain, link, holders) through so cards
-     can display "Aggregated from Magic Eden" badges, deep-link
-     to the underlying marketplace, etc. */
+  /* Populates the `collections` state via the multi-source NFT
+     aggregator (Magic Eden + Reservoir + Tensor) defined below.
+     Returns the unified shape with floor/volume aliases kept for
+     any future consumers; new fields (platform/source/chain/link/
+     holders) pass through unchanged. */
   try {
     const aggregated = await fetchAllNFTs({ limit: 20 });
     if(!aggregated || aggregated.length === 0){
@@ -1174,8 +1186,8 @@ async function fetchNFTCollections(){
       name:      n.name,
       image:     n.image,
       imageLow:  n.image,            // no smaller variant from aggregator sources
-      floor:     n.floorPrice,        // legacy alias for FeaturedCollections
-      volume:    n.volume24h,         // legacy alias
+      floor:     n.floorPrice,
+      volume:    n.volume24h,
       currency:  n.currency,
       // New aggregator fields (opt-in for any new UI):
       source:    n.source,
@@ -1395,6 +1407,31 @@ window.NFTAggregator = { fetchAllNFTs, NFT_CHAINS, NFT_SOURCES };
 console.log('✓ NFT Aggregator loaded');
 
 /* ─────────────────────────────────────────────────────────
+   DEFILLAMA YIELDS — free, no key. ~3-5MB payload, cached.
+   Returns the global pool list; downstream code filters it.
+   ───────────────────────────────────────────────────────── */
+async function fetchDeFiYields(){
+  return cachedFetch('defillama_yields', async () => {
+    const res = await fetch('https://yields.llama.fi/pools');
+    if(!res.ok) throw new Error('DefiLlama yields failed');
+    const json = await res.json();
+    return Array.isArray(json?.data) ? json.data : [];
+  }, 600_000); // 10 min — yield APYs don't move minute-to-minute
+}
+
+/* CoinGecko historical price chart — free, no key. */
+async function fetchCoinHistory(coinId, days){
+  if(!coinId) return [];
+  return cachedFetch(`cg_hist_${coinId}_${days}`, async () => {
+    const url = `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coinId)}/market_chart?vs_currency=usd&days=${days}`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('CoinGecko history failed: '+res.status);
+    const json = await res.json();
+    return (json?.prices || []).map(([ts, v]) => ({ ts, v }));
+  }, 180_000);
+}
+
+/* ─────────────────────────────────────────────────────────
    APP CONTEXT
    ───────────────────────────────────────────────────────── */
 const AppCtx = createContext(null);
@@ -1404,7 +1441,6 @@ function AppProvider({ children }){
   const [showSearch, setShowSearch] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [proView, setProView] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [activeTxModal, setActiveTxModal] = useState(null);
@@ -1718,9 +1754,9 @@ function AppProvider({ children }){
   }, []);
 
   useEffect(()=>{
-    const anyOpen = showSidebar || showWallet || showSearch || showFilters || showAdmin || activeTxModal || activeNFT || activeStakeModal || activeCollection;
+    const anyOpen = showSidebar || showWallet || showSearch || showAdmin || activeTxModal || activeNFT || activeStakeModal || activeCollection;
     document.body.style.overflow = anyOpen ? 'hidden' : '';
-  }, [showSidebar, showWallet, showSearch, showFilters, showAdmin, activeTxModal, activeNFT, activeStakeModal, activeCollection]);
+  }, [showSidebar, showWallet, showSearch, showAdmin, activeTxModal, activeNFT, activeStakeModal, activeCollection]);
 
   return (
     <AppCtx.Provider value={{
@@ -1730,7 +1766,6 @@ function AppProvider({ children }){
       showSearch, setShowSearch,
       showSidebar, setShowSidebar,
       sidebarCollapsed, setSidebarCollapsed,
-      showFilters, setShowFilters,
       proView, setProView,
       pushToast, toasts,
       activeTxModal, setActiveTxModal,
@@ -2058,7 +2093,7 @@ function Sidebar(){
 function PageMeta(){
   const loc = useLocation();
   const map = {
-    "/":            { title:"Markets",     sub:`Real-time data from ${PROJECT_CONFIG.network} blockchain`, live:true },
+    "/":            { title:"Dashboard",   sub:`Welcome back to ${PROJECT_CONFIG.name}`,                  live:true },
     "/marketplace": { title:"NFTs",         sub:"Browse, mint and trade collections",                       live:false },
     "/staking":     { title:"Stake",        sub:"Earn rewards by locking your tokens",                      live:false },
     "/governance":  { title:"Governance",   sub:"Vote on protocol changes with your stake",                 live:false },
@@ -2076,10 +2111,10 @@ function Header(){
 
   const SearchBtn = ({ wide }) => (
     <button onClick={()=>setShowSearch(true)}
-      className={"flex items-center gap-2 px-3.5 h-10 rounded-full bg-surface border border-line hover:border-line-2 text-ink-400 text-[13px] transition-colors "+(wide?"w-[300px] xl:w-[420px]":"w-full max-w-[420px]")}>
-      <Icon name="search" size={14}/>
+      className={"group flex items-center gap-2.5 px-4 h-10 rounded-full bg-hover hover:bg-[var(--surface-2)] text-ink-400 hover:text-ink-200 text-[13px] transition-colors "+(wide?"w-[300px] xl:w-[420px]":"w-full max-w-[420px]")}>
+      <Icon name="search" size={14} className="text-ink-500 group-hover:text-ink-300 transition-colors"/>
       <span className="flex-1 text-left truncate">Search markets or tokens…</span>
-      <kbd className="text-[10px] font-mono text-ink-500 px-1.5 py-0.5 rounded border border-line flex-shrink-0">/</kbd>
+      <kbd className="text-[10px] font-mono text-ink-500 px-1.5 py-0.5 rounded-md bg-surface/60 flex-shrink-0">/</kbd>
     </button>
   );
 
@@ -2107,29 +2142,41 @@ function Header(){
 
   return (
     <header className="sticky top-0 z-20 glass">
-      {/* Mobile bar (< lg) */}
-      <div className="lg:hidden flex items-center gap-2 min-h-[60px] px-3">
-        <button onClick={()=>setShowSidebar(true)} className="btn btn-ghost btn-icon" aria-label="Open menu">
+      {/* Mobile bar (< lg) — minimal: brand on left, bell + wallet on right */}
+      <div className="lg:hidden flex items-center gap-2 min-h-[60px] px-4">
+        <button onClick={()=>setShowSidebar(true)} className="btn btn-ghost btn-icon -ml-2" aria-label="Open menu">
           <Icon name="menu" size={18}/>
         </button>
         <Link to="/" className="flex items-center gap-2 min-w-0">
           <NexusLogo size={22}/>
-          <span className="font-semibold text-[15px] truncate">{meta.title}</span>
-          {meta.live && <span className="chip chip-pos text-[10px] flex-shrink-0 hidden sm:inline-flex"><span className="dot pulse"/> Live</span>}
+          <span className="font-semibold text-[16px] tracking-tight truncate">{PROJECT_CONFIG.name}</span>
         </Link>
         <div className="flex-1"/>
-        <button onClick={()=>setShowSearch(true)} className="btn btn-ghost btn-icon" aria-label="Search">
-          <Icon name="search" size={16}/>
+        <button className="btn btn-ghost btn-icon relative" aria-label="Notifications">
+          <Icon name="bell" size={16}/>
+          <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-accent-3"/>
         </button>
-        <WalletCluster/>
+        {!wallet ? (
+          <button onClick={()=>setShowWallet(true)} className="btn btn-primary text-[12.5px] py-1.5 px-3">
+            Connect
+          </button>
+        ) : (
+          <button onClick={()=>setShowWallet(true)} className="halo rounded-full flex-shrink-0" aria-label="Wallet">
+            <Identicon seed={wallet.address} size={32}/>
+          </button>
+        )}
       </div>
 
       {/* Desktop bar (lg+) — title hugs the left, search sits next to it, controls float to the right edge */}
-      <div className="hidden lg:flex items-center min-h-[68px] px-6 gap-6">
+      <div className="hidden lg:flex items-center min-h-[72px] px-6 gap-6">
         <div className="min-w-0 max-w-[280px] xl:max-w-[340px] flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-[18px] font-semibold tracking-tight truncate leading-tight">{meta.title}</h1>
-            {meta.live && <span className="chip chip-pos text-[10px] flex-shrink-0"><span className="dot pulse"/> Live</span>}
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-[19px] font-semibold tracking-[-0.01em] truncate leading-tight">{meta.title}</h1>
+            {meta.live && (
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-pos flex-shrink-0">
+                <span className="dot pulse"/> Live
+              </span>
+            )}
           </div>
           <p className="text-[12px] text-ink-400 truncate leading-tight mt-0.5">{meta.sub}</p>
         </div>
@@ -3285,45 +3332,604 @@ function MarketDataChip(){
   );
 }
 
+/* ─────────────────────────────────────────────────────────
+   DASHBOARD — mobile (< lg) shows a wallet-app layout:
+   Balance + chart, 4 quick actions, asset list. Desktop
+   (lg+) keeps the multi-card grid.
+   ───────────────────────────────────────────────────────── */
 function MarketsPage(){
-  const { setActiveTxModal, tokens } = useApp();
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <MarketDataChip/>
-        <div className="flex items-center gap-2">
-          <button onClick={()=>setActiveTxModal({ type:'Buy', token: tokens[0], amount: 1000 })} className="btn btn-primary">
-            <Icon name="arrow-down-up" size={14}/> Trade
-          </button>
-          <button className="btn btn-secondary">
-            <Icon name="arrow-down-to-line" size={14}/> Deposit
-          </button>
+    <>
+      {/* Mobile layout */}
+      <div className="lg:hidden space-y-4">
+        <MobileBalanceCard/>
+        <MobileQuickActions/>
+        <MobileAssetsList/>
+      </div>
+
+      {/* Desktop layout */}
+      <div className="hidden lg:block space-y-5">
+        <DashKpiRow/>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2"><DashOverviewCard/></div>
+          <DashAllocationCard/>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <DashTopGainersCard/>
+          <DashRecentActivityCard/>
+          <DashExploreCard/>
         </div>
       </div>
+    </>
+  );
+}
 
-      <StatGrid/>
+/* ── Mobile: Balance card with 7d area chart ─────────────── */
+function MobileBalanceCard(){
+  const { wallet, tokens } = useApp();
+  const [history, setHistory] = useState([]);
 
-      {/* Chart + Order Book — side-by-side per reference */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        <div className="lg:col-span-2"><PriceChartCard/></div>
-        <div><OrderBookCard/></div>
+  const trackedCoin = useMemo(()=>{
+    if(wallet?.chain?.cgId){
+      const t = tokens.find(t => (t.id||'').toLowerCase() === wallet.chain.cgId.toLowerCase());
+      if(t) return t;
+    }
+    return tokens.find(t => (t.id||'') === 'ethereum') || tokens[1] || tokens[0];
+  }, [wallet, tokens]);
+
+  const nativeHoldings = wallet?.balance?.native || 0;
+  const showAsPortfolio = !!wallet && nativeHoldings > 0;
+
+  useEffect(()=>{
+    let cancelled = false;
+    if(trackedCoin?.sparkline?.length > 0){
+      setHistory(trackedCoin.sparkline.map((v,i)=>({ i, v })));
+      return;
+    }
+    if(!trackedCoin?.id) return;
+    fetchCoinHistory(trackedCoin.id, 7).then(rows => {
+      if(cancelled) return;
+      setHistory(rows.map((r,i)=>({ i, v: r.v })));
+    }).catch(()=>{ if(!cancelled) setHistory([]); });
+    return ()=> { cancelled = true; };
+  }, [trackedCoin?.id, trackedCoin?.sparkline]);
+
+  const data = useMemo(()=> showAsPortfolio ? history.map(r=>({ ...r, v: r.v*nativeHoldings })) : history,
+    [history, nativeHoldings, showAsPortfolio]);
+  const currentValue = showAsPortfolio
+    ? nativeHoldings * (trackedCoin?.price || 0)
+    : (trackedCoin?.price || 0);
+  const change = trackedCoin?.change ?? 0;
+
+  return (
+    <div className="surface p-4 overflow-hidden">
+      <div className="text-[11px] text-ink-500 font-medium">
+        {showAsPortfolio ? 'Total Balance' : `${trackedCoin?.name || 'Market'} Price`}
       </div>
-
-      {/* Portfolio + Recent Transactions + Top Movers — 3-col row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-        <PortfolioCard/>
-        <RecentActivityCard/>
-        <TopMoversCard/>
+      <div className="text-[26px] font-bold tracking-tight mt-1 leading-none">
+        {currentValue > 0 ? fmt.usd(currentValue, currentValue < 1 ? 4 : 2) : '$0.00'}
       </div>
-
-      {/* Swap + Your Assets */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        <div className="lg:col-span-2"><SwapWidget/></div>
-        <div><YourAssets/></div>
+      <div className={"text-[12px] font-semibold mt-1.5 "+(change>=0?"text-pos":"text-neg")}>
+        {fmt.pct(change, 2)} <span className="text-ink-500 font-normal">(24h)</span>
       </div>
+      <div className="h-24 mt-2 -mx-2">
+        {data.length > 0 && (
+          <ResponsiveContainer>
+            <AreaChart data={data} margin={{top:4,right:4,left:4,bottom:0}}>
+              <defs>
+                <linearGradient id="mobBalG" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.35}/>
+                  <stop offset="100%" stopColor="#7c3aed" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <Tooltip formatter={v=>fmt.usd(v, v<10?4:2)} contentStyle={{display:'none'}}/>
+              <Area type="monotone" dataKey="v" stroke="#7c3aed" strokeWidth={2} fill="url(#mobBalG)" isAnimationActive={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {/* Tx feed full width */}
-      <TxFeedCard rows={9}/>
+/* ── Mobile: 4 quick-action buttons ──────────────────────── */
+function MobileQuickActions(){
+  const { wallet, tokens, setActiveTxModal, setShowWallet } = useApp();
+  const nativeToken = wallet
+    ? tokens.find(t => (t.id||'').toLowerCase() === (wallet.chain?.cgId||'').toLowerCase()) || tokens[0]
+    : tokens[0];
+
+  const handle = (type) => {
+    if(!wallet){ setShowWallet(true); return; }
+    setActiveTxModal({ type, token: nativeToken, amount: 0 });
+  };
+
+  const actions = [
+    { type:'Send',    icon:'arrow-up',      color:'#7c3aed' },
+    { type:'Receive', icon:'arrow-down',    color:'#10b981' },
+    { type:'Swap',    icon:'arrow-down-up', color:'#06b6d4' },
+    { type:'Buy',     icon:'plus',          color:'#f59e0b' },
+  ];
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {actions.map(a => (
+        <button key={a.type} onClick={()=>handle(a.type)}
+          className="flex flex-col items-center gap-1.5 p-2 rounded-xl2 active:scale-95 transition-transform">
+          <span className="w-12 h-12 rounded-full flex items-center justify-center"
+            style={{ background: a.color+'1f', color: a.color }}>
+            <Icon name={a.icon} size={18}/>
+          </span>
+          <span className="text-[11.5px] font-medium text-ink-100">{a.type}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ── Mobile: Assets list (real prices + wallet holdings) ─── */
+function MobileAssetsList(){
+  const { wallet, tokens } = useApp();
+  const nativeId = (wallet?.chain?.cgId||'').toLowerCase();
+  const nativeHoldings = wallet?.balance?.native || 0;
+
+  const rows = useMemo(()=>{
+    const real = (tokens||[]).filter(t => t.symbol !== PROJECT_CONFIG.ticker);
+    return real.slice(0, 5).map(t => {
+      const isWalletAsset = (t.id||'').toLowerCase() === nativeId;
+      const holdings = isWalletAsset ? nativeHoldings : 0;
+      return { ...t, holdings, usdValue: holdings * (t.price||0) };
+    });
+  }, [tokens, nativeId, nativeHoldings]);
+
+  return (
+    <div className="surface p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[15px] font-semibold">Assets</h3>
+        <Link to="/profile" className="text-[12px] text-accent hover:underline">View All</Link>
+      </div>
+      <div className="space-y-3.5">
+        {rows.length === 0 && (
+          <div className="text-center py-6 text-[12px] text-ink-500">Loading market data…</div>
+        )}
+        {rows.map(t => (
+          <div key={t.symbol} className="flex items-center gap-3">
+            <TokenMark symbol={t.symbol} size={36}/>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13.5px] font-semibold leading-tight truncate">{t.name}</div>
+              <div className="text-[11px] text-ink-500 leading-tight font-mono">{t.symbol}</div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              {t.usdValue > 0 ? (
+                <>
+                  <div className="text-[13.5px] font-mono font-semibold tnum leading-tight">{fmt.usd(t.usdValue, 2)}</div>
+                  <div className="text-[11px] text-ink-500 font-mono leading-tight">
+                    {t.holdings.toFixed(t.holdings<1?6:4)} {t.symbol}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-[13.5px] font-mono tnum leading-tight">{fmt.usd(t.price, t.price<1?4:2)}</div>
+                  <div className={"text-[11px] font-mono font-semibold leading-tight "+((t.change||0)>=0?"text-pos":"text-neg")}>
+                    {fmt.pct(t.change||0, 2)}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── KPI row ─────────────────────────────────────────────── */
+function DashKpiRow(){
+  const { wallet, tokens, collections } = useApp();
+  const [topApy, setTopApy] = useState(undefined); // undefined = loading, null = failed
+
+  useEffect(()=>{
+    let cancelled = false;
+    fetchDeFiYields().then(pools => {
+      if(cancelled) return;
+      // Filter: TVL > $10M, plausible APY (>0%, <200% to exclude scammy farms)
+      const safe = pools.filter(p => (p.tvlUsd||0) > 10_000_000 && (p.apy||0) > 0 && (p.apy||0) < 200);
+      const top = safe.sort((a,b)=>(b.apy||0)-(a.apy||0))[0] || null;
+      setTopApy(top);
+    }).catch(()=> setTopApy(null));
+    return ()=> { cancelled = true; };
+  }, []);
+
+  const nativeToken      = wallet ? tokens.find(t => (t.id||'').toLowerCase() === (wallet.chain?.cgId||'').toLowerCase()) : null;
+  const totalBalanceUsd  = wallet ? (wallet.balance?.native || 0) * (nativeToken?.price || 0) : 0;
+  const balanceChange    = nativeToken?.change ?? null;
+
+  const totalVol24h      = (tokens||[]).slice(0, 10).reduce((s, t) => s + (t.vol||0), 0);
+
+  const btcToken         = tokens.find(t => (t.id||'') === 'bitcoin') || tokens[0];
+  const ethToken         = tokens.find(t => (t.id||'') === 'ethereum') || tokens[1];
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <DashKpiCard
+        label="Total Balance"
+        value={wallet ? fmt.usd(totalBalanceUsd, 2) : '—'}
+        change={wallet && balanceChange!=null ? fmt.pct(balanceChange, 2) : null}
+        changeColor={balanceChange!=null && balanceChange < 0 ? 'var(--neg)' : null}
+        sub={wallet ? '(24h)' : 'Connect wallet'}
+        tint="#8b5cf6"
+        icon="dollar-sign"
+        spark={nativeToken?.sparkline || ethToken?.sparkline}/>
+      <DashKpiCard
+        label="24h Volume"
+        value={fmt.usd(totalVol24h, 0)}
+        change="Top 10 markets"
+        sub="CoinGecko · live"
+        tint="#10b981"
+        icon="trending-up"
+        spark={btcToken?.sparkline}/>
+      <DashKpiCard
+        label="Top DeFi APY"
+        value={topApy ? topApy.apy.toFixed(2)+'%' : (topApy===null ? '—' : '…')}
+        change={topApy ? topApy.project : (topApy===null ? 'Unavailable' : 'Loading…')}
+        sub={topApy ? topApy.chain : 'DefiLlama'}
+        tint="#f59e0b"
+        icon="line-chart"
+        spark={ethToken?.sparkline}/>
+      <DashKpiCard
+        label="NFT Collections"
+        value={(collections||[]).length > 0 ? String(collections.length) : '—'}
+        change={(collections||[]).length > 0 ? 'Live' : 'Loading…'}
+        sub="Aggregator"
+        tint="#3b82f6"
+        icon="image"
+        spark={ethToken?.sparkline}/>
+    </div>
+  );
+}
+
+function DashKpiCard({ label, value, change, changeColor, sub, tint, icon, spark }){
+  const data = useMemo(()=>{
+    if(spark && spark.length > 0) return spark.slice(-30).map(v => ({ v }));
+    // Flat dotted-line placeholder while loading (no synthesized fake motion)
+    return Array.from({length: 24}, () => ({ v: 1 }));
+  }, [spark]);
+  const hasRealSpark = !!(spark && spark.length > 0);
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[12px] text-ink-400 font-medium">{label}</span>
+        <span className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{ background: tint+'1f', color: tint }}>
+          <Icon name={icon} size={14}/>
+        </span>
+      </div>
+      <div className="text-[22px] sm:text-[24px] font-bold tracking-tight leading-tight">{value}</div>
+      <div className="mt-1 flex items-center gap-1.5 text-[12px]">
+        {change != null && (
+          <span style={{ color: changeColor || tint }} className="font-semibold truncate">{change}</span>
+        )}
+        {sub && <span className="text-ink-500 truncate">{sub}</span>}
+      </div>
+      <div className="mt-2 h-10 -mx-1" style={{ opacity: hasRealSpark ? 1 : 0.25 }}>
+        <Sparkline data={data} color={tint} height={40}/>
+      </div>
+    </div>
+  );
+}
+
+/* ── Portfolio Overview (area chart) ─────────────────────── */
+function DashOverviewCard(){
+  const { wallet, tokens } = useApp();
+  const [range, setRange] = useState('7D');
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Track wallet's native chain when connected, else ETH
+  const trackedCoin = useMemo(() => {
+    if(wallet?.chain?.cgId){
+      const t = tokens.find(t => (t.id||'').toLowerCase() === wallet.chain.cgId.toLowerCase());
+      if(t) return t;
+    }
+    return tokens.find(t => (t.id||'') === 'ethereum') || tokens.find(t=>(t.id||'')==='bitcoin') || tokens[1];
+  }, [wallet, tokens]);
+
+  const nativeHoldings = wallet?.balance?.native || 0;
+  const showAsPortfolio = !!wallet && nativeHoldings > 0;
+
+  useEffect(()=>{
+    let cancelled = false;
+    // 7D fast path — reuse the sparkline already loaded with tokens
+    if(range === '7D' && trackedCoin?.sparkline?.length > 0){
+      const prices = trackedCoin.sparkline;
+      const stepMs = (7 * 86_400_000) / Math.max(prices.length - 1, 1);
+      const now = Date.now();
+      setHistory(prices.map((p, i) => ({
+        i, ts: now - (prices.length - 1 - i) * stepMs, v: p,
+      })));
+      setLoading(false);
+      return;
+    }
+    if(!trackedCoin?.id){ setHistory([]); return; }
+    setLoading(true);
+    const days = { '1D':1, '7D':7, '30D':30, '90D':90 }[range] || 7;
+    fetchCoinHistory(trackedCoin.id, days).then(rows => {
+      if(cancelled) return;
+      setHistory(rows.map((r, i) => ({ i, ts: r.ts, v: r.v })));
+      setLoading(false);
+    }).catch(()=>{ if(!cancelled){ setHistory([]); setLoading(false); } });
+    return ()=> { cancelled = true; };
+  }, [range, trackedCoin?.id, trackedCoin?.sparkline]);
+
+  // Optionally scale chart by holdings to read as portfolio value
+  const data = useMemo(()=> {
+    if(!showAsPortfolio) return history;
+    return history.map(r => ({ ...r, v: r.v * nativeHoldings }));
+  }, [history, nativeHoldings, showAsPortfolio]);
+
+  const currentValue = showAsPortfolio
+    ? nativeHoldings * (trackedCoin?.price || 0)
+    : (trackedCoin?.price || 0);
+  const change = trackedCoin?.change ?? 0;
+
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h3 className="text-[14px] font-semibold truncate">
+            {showAsPortfolio ? 'Portfolio Overview' : `${trackedCoin?.name || 'Market'} Price`}
+          </h3>
+          {!wallet && <p className="text-[11px] text-ink-500 mt-0.5 truncate">Live · CoinGecko · connect a wallet to track your portfolio</p>}
+        </div>
+        <RangeTabs value={range} onChange={setRange} options={['1D','7D','30D','90D']}/>
+      </div>
+      <div className="flex items-baseline gap-2 mb-3 flex-wrap">
+        <div className="text-[24px] sm:text-[26px] font-bold tracking-tight">
+          {currentValue > 0 ? fmt.usd(currentValue, currentValue < 1 ? 4 : 2) : '—'}
+        </div>
+        <div className={"text-[12px] font-semibold "+(change>=0?"text-pos":"text-neg")}>{fmt.pct(change, 2)}</div>
+        {!showAsPortfolio && trackedCoin && (
+          <span className="text-[11px] text-ink-500 font-mono">{trackedCoin.symbol}</span>
+        )}
+      </div>
+      <div className="h-52 sm:h-60 -mx-2">
+        {data.length > 0 ? (
+          <ResponsiveContainer>
+            <AreaChart data={data} margin={{top:8,right:8,left:0,bottom:0}}>
+              <defs>
+                <linearGradient id="dashOverviewG" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.30}/>
+                  <stop offset="100%" stopColor="#7c3aed" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--chart-grid)" vertical={false}/>
+              <XAxis dataKey="i" stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}
+                tickFormatter={(_,idx)=>{
+                  const row = data[idx]; if(!row?.ts) return '';
+                  const d = new Date(row.ts);
+                  return range === '1D'
+                    ? d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' })
+                    : d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+                }}
+                ticks={[0, Math.floor(data.length*0.33), Math.floor(data.length*0.66), data.length-1]}/>
+              <YAxis stroke="var(--ink-500)" fontSize={10} tickLine={false} axisLine={false}
+                tickFormatter={v=> v>=1000 ? '$'+(v/1000).toFixed(1)+'K' : '$'+v.toFixed(v<10?2:0)} width={50}/>
+              <Tooltip formatter={v=>fmt.usd(v, v<10?4:2)} labelFormatter={(_,p)=>{
+                const ts = p?.[0]?.payload?.ts; if(!ts) return '';
+                return new Date(ts).toLocaleString();
+              }}/>
+              <Area type="monotone" dataKey="v" stroke="#7c3aed" strokeWidth={2} fill="url(#dashOverviewG)" isAnimationActive={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center text-[12px] text-ink-500">
+            {loading ? 'Loading price history…' : 'No data available'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RangeTabs({ value, onChange, options }){
+  return (
+    <div className="inline-flex bg-hover rounded-lg p-0.5 text-[11px] font-medium">
+      {options.map(o => (
+        <button key={o} onClick={()=>onChange(o)}
+          className={"px-2.5 py-1 rounded-md transition-colors "+
+            (value===o ? "bg-surface text-ink-50 shadow-sm" : "text-ink-400 hover:text-ink-200")}>
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ── Assets Allocation (donut) — top tokens by market cap ── */
+function DashAllocationCard(){
+  const { tokens } = useApp();
+  const COLORS = ['#7c3aed', '#f59e0b', '#06b6d4', '#3b82f6', '#9aa3b8'];
+  const data = useMemo(()=>{
+    // Exclude the synthetic project token (always index 0) — its mcap is
+    // too small next to BTC/ETH and rounds to 0.0% which looks broken.
+    const real = (tokens||[]).filter(t => t.symbol !== PROJECT_CONFIG.ticker && (t.mcap||0) > 0);
+    const top10 = real.slice(0, 10);
+    const total = top10.reduce((s,t)=> s + (t.mcap||0), 0);
+    if(total === 0) return [];
+    const top4 = top10.slice(0, 4);
+    const others = top10.slice(4);
+    const othersMcap = others.reduce((s,t)=> s + (t.mcap||0), 0);
+    const rows = top4.map((t, i) => ({
+      name:  t.name + (t.symbol ? ` (${t.symbol})` : ''),
+      short: t.symbol,
+      value: (t.mcap / total) * 100,
+      mcap:  t.mcap,
+      color: COLORS[i],
+    }));
+    if(othersMcap > 0){
+      rows.push({ name: 'Other', short: 'Other', value: (othersMcap/total)*100, mcap: othersMcap, color: COLORS[4] });
+    }
+    return rows;
+  }, [tokens]);
+
+  const totalMcapLabel = useMemo(()=> {
+    const sum = data.reduce((s,d)=> s+d.mcap, 0);
+    return sum > 0 ? '$'+fmt.compact(sum) : '—';
+  }, [data]);
+
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[14px] font-semibold">Market Allocation</h3>
+        <Link to="/analytics" className="text-[12px] text-accent hover:underline">View All</Link>
+      </div>
+      <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center">
+        <div className="relative w-[150px] h-[150px] flex-shrink-0">
+          {data.length > 0 ? (
+            <>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={48} outerRadius={72} paddingAngle={2} startAngle={90} endAngle={-270} stroke="none">
+                    {data.map((d,i)=>(<Cell key={i} fill={d.color}/>))}
+                  </Pie>
+                  <Tooltip formatter={v=>v.toFixed(1)+'%'}/>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="text-[14px] font-bold">{totalMcapLabel}</div>
+                <div className="text-[10px] text-ink-500">Top 10 mcap</div>
+              </div>
+            </>
+          ) : (
+            <div className="h-full flex items-center justify-center text-[11px] text-ink-500">Loading…</div>
+          )}
+        </div>
+        <div className="flex-1 w-full space-y-2">
+          {data.length === 0 && <div className="text-[12px] text-ink-500">Loading market data…</div>}
+          {data.map(d => (
+            <div key={d.short} className="flex items-center gap-2 text-[12px]">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background:d.color}}/>
+              <span className="text-ink-100 truncate flex-1">{d.name}</span>
+              <span className="text-ink-50 font-semibold tnum">{d.value.toFixed(1)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Top Gainers ─────────────────────────────────────────── */
+function DashTopGainersCard(){
+  const { tokens } = useApp();
+  const gainers = useMemo(()=>{
+    const ranked = (tokens||[]).slice().sort((a,b)=>(b.change||0)-(a.change||0)).slice(0,3);
+    return ranked.map((t,i) => ({
+      ...t,
+      spark: (t.sparkline && t.sparkline.length>1)
+        ? t.sparkline.map(v=>({v}))
+        : Array.from({length:18},(_,k)=>({ v: Math.max(0.0001, t.price * (1 + (Math.sin(k*0.6+i)+0.3)*0.04)) })),
+    }));
+  }, [tokens]);
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1.5 text-[14px] font-semibold">
+          Top Gainers <Icon name="trending-up" size={13} className="text-pos"/>
+        </div>
+        <Link to="/analytics" className="text-[12px] text-accent hover:underline">View All</Link>
+      </div>
+      <div className="space-y-2.5">
+        {gainers.map(t => (
+          <div key={t.symbol} className="flex items-center gap-2.5 row-hover -mx-2 px-2 py-1.5 rounded-lg">
+            <TokenMark symbol={t.symbol} size={28}/>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold leading-tight">{t.name}</div>
+              <div className="text-[11px] text-ink-500 font-mono leading-tight">{t.symbol}</div>
+            </div>
+            <div className="flex-1 h-8 min-w-0"><Sparkline data={t.spark} color="#10b981"/></div>
+            <div className="text-right tnum text-[12.5px] font-mono">{fmt.usd(t.price, t.price<1?4:2)}</div>
+          </div>
+        ))}
+        {gainers.length===0 && <div className="text-center py-6 text-[12px] text-ink-500">No movers yet</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Recent Activity (compact) ───────────────────────────── */
+function DashRecentActivityCard(){
+  const { activity } = useApp();
+  const items = (activity || []).slice(0,3);
+  const tint = (k) => ({
+    "Swap":["#10b981","rgba(16,185,129,0.10)"],
+    "Stake":["#ef4444","rgba(239,68,68,0.10)"],
+    "Deposit":["#06b6d4","rgba(6,182,212,0.10)"],
+    "Transfer":["#a78bfa","rgba(167,139,250,0.10)"],
+    "Claim":["#a78bfa","rgba(167,139,250,0.10)"],
+    "Claim Reward":["#a78bfa","rgba(167,139,250,0.10)"],
+    "Unstake":["#f59e0b","rgba(245,158,11,0.10)"],
+    "Mint":["#06b6d4","rgba(6,182,212,0.10)"],
+    "Sale":["#10b981","rgba(16,185,129,0.10)"],
+    "Failed":["#ef4444","rgba(239,68,68,0.10)"],
+  }[k] || ["#a78bfa","rgba(167,139,250,0.10)"]);
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[14px] font-semibold">Recent Activity</h3>
+        <Link to="/profile" className="text-[12px] text-accent hover:underline">View All</Link>
+      </div>
+      <div className="space-y-2">
+        {items.map(it => {
+          const [c,bg] = tint(it.kind);
+          return (
+            <div key={it.id} className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{background:bg, color:c}}>
+                <Icon name={it.icon} size={14}/>
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] font-semibold leading-tight">{it.kind==='Deposit'?'Received':it.kind}</div>
+                <div className="text-[10.5px] text-ink-500 truncate leading-tight">{it.desc}</div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className={"text-[12px] font-mono "+(it.up?"text-pos":"text-neg")}>{it.amt}</div>
+                <div className="text-[10px] text-ink-500">{it.ts ? fmt.ago(it.ts)+' ago' : ''}</div>
+              </div>
+            </div>
+          );
+        })}
+        {items.length===0 && <div className="text-center py-6 text-[12px] text-ink-500">No recent activity</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Explore DeFi CTA ────────────────────────────────────── */
+function DashExploreCard(){
+  return (
+    <div className="surface p-4 sm:p-5 relative overflow-hidden">
+      <button className="absolute top-3 right-3 text-ink-400 hover:text-ink-50" aria-label="Dismiss">
+        <Icon name="x" size={14}/>
+      </button>
+      <div className="relative z-10">
+        <h3 className="text-[15px] font-bold leading-tight pr-6">Explore DeFi Opportunities</h3>
+        <p className="text-[12px] text-ink-400 mt-1.5">Earn up to 18.7% APY on your assets</p>
+        <Link to="/staking" className="btn btn-primary mt-4 text-[12px]">Explore Now</Link>
+      </div>
+      <div className="absolute right-2 bottom-0 w-24 h-24 opacity-90 pointer-events-none">
+        <svg viewBox="0 0 100 100" width="100%" height="100%">
+          <defs>
+            <linearGradient id="exploreG" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#a78bfa"/>
+              <stop offset="100%" stopColor="#7c3aed"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="50" cy="78" rx="32" ry="6" fill="url(#exploreG)" opacity="0.35"/>
+          <rect x="22" y="56" width="56" height="14" rx="2" fill="url(#exploreG)" opacity="0.85"/>
+          <rect x="28" y="42" width="44" height="14" rx="2" fill="url(#exploreG)"/>
+          <rect x="34" y="28" width="32" height="14" rx="2" fill="url(#exploreG)" opacity="0.9"/>
+          <circle cx="50" cy="22" r="6" fill="#c4b5fd"/>
+        </svg>
+      </div>
     </div>
   );
 }
@@ -3372,423 +3978,153 @@ function NFTCard({ nft, onClick, density="comfortable" }){
   );
 }
 
-function FilterPanel({ filter, setFilter, sort, setSort, count, total, isInline=false }){
-  return (
-    <div className="space-y-5">
-      <div>
-        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Status</h4>
-        <div className="flex flex-wrap gap-1.5">
-          {["All","Listed","Auction"].map(s => (
-            <button key={s} onClick={()=>setFilter(f=>({...f, status:s}))}
-              className={"chip "+(filter.status===s?"chip-accent":"")}>{s}</button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Rarity</h4>
-        <div className="flex flex-wrap gap-1.5">
-          {["All", ...NFT_TRAITS.Rarity].map(r => (
-            <button key={r} onClick={()=>setFilter(f=>({...f, rarity:r}))}
-              className={"chip "+(filter.rarity===r?"chip-accent":"")}>{r}</button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Price (SOL): up to {filter.price[1].toFixed(1)}</h4>
-        <input type="range" min="0" max="12" step="0.1" value={filter.price[1]} onChange={e=>setFilter(f=>({...f, price:[0, parseFloat(e.target.value)]}))} className="w-full"/>
-      </div>
-      <div>
-        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Trait</h4>
-        <select value={filter.trait} onChange={e=>setFilter(f=>({...f, trait:e.target.value}))} className="input text-[13px]">
-          <option>All</option>
-          {Object.values(NFT_TRAITS).flat().map((t,i)=>(<option key={i}>{t}</option>))}
-        </select>
-      </div>
-      <div>
-        <h4 className="text-[11px] uppercase tracking-wider text-ink-500 mb-2">Sort</h4>
-        <select value={sort} onChange={e=>setSort(e.target.value)} className="input text-[13px]">
-          <option value="price-low">Price: Low to High</option>
-          <option value="price-high">Price: High to Low</option>
-          <option value="rarity">Rarity</option>
-        </select>
-      </div>
-      <div className="text-[12px] text-ink-400 pt-3 border-t border-line">
-        Showing <span className="text-ink-100 font-mono">{count}</span> of {total}
-      </div>
-    </div>
-  );
-}
+function MarketplacePage() {
+  const [nfts, setNfts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    chains: Object.values(window.NFTAggregator.NFT_CHAINS),
+    searchQuery: ''
+  });
 
-const MKT_TABS = [
-  { id:"curated",  label:"Curated"  },
-  { id:"all",      label:"All"      },
-  { id:"trending", label:"Trending" },
-  { id:"editions", label:"Liquid Editions" },
-];
-const MKT_VIEWS = [
-  { id:"grid",    icon:"layout-grid", cols:"grid-cols-2 sm:grid-cols-3 xl:grid-cols-4" },
-  { id:"dense",   icon:"grid-3x3",    cols:"grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" },
-  { id:"list",    icon:"list",        cols:"grid-cols-1" },
-  { id:"image",   icon:"image",       cols:"grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" },
-];
-const SORT_OPTIONS = [
-  { id:"recent",     label:"Recent activity" },
-  { id:"ending",     label:"Ending soon" },
-  { id:"price-low",  label:"Price: low to high" },
-  { id:"price-high", label:"Price: high to low" },
-  { id:"sales",      label:"Most collected" },
-];
+  useEffect(() => {
+    loadNFTs();
+  }, [filters.chains]);
 
-function FeaturedCollections(){
-  const { collections, collectionsStatus, setActiveCollection } = useApp();
-  const isInitialLoad = collectionsStatus.loading && collectionsStatus.source === 'mock';
-  const ago = collectionsStatus.updatedAt
-    ? Math.floor((Date.now()-collectionsStatus.updatedAt)/1000)
-    : null;
-
-  const [expanded, setExpanded] = useState(false);
-  const visibleCount = expanded ? Math.min(8, collections.length) : 4;
-  const shown = collections.slice(0, visibleCount);
-  const moreAvailable = collections.length > 4;
-
-  // Tally which platforms actually contributed to the visible feed so
-  // the header chip can read e.g. "Aggregator · 3 sources" instead of
-  // a single static "Magic Eden" pill.
-  const platformsLive = Array.from(new Set(
-    collections.map(c => c.platform?.name).filter(Boolean)
-  ));
-
-  return (
-    <div className="surface p-4 sm:p-5">
-      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-[14px] font-semibold">Trending across marketplaces</h3>
-          {collectionsStatus.source === 'live' && platformsLive.length > 0 && (
-            <span className="chip chip-pos" title={
-              "Aggregated from " + platformsLive.join(', ') +
-              (ago!=null ? " · refreshed "+ago+"s ago" : "")
-            }>
-              <span className="dot"/> Aggregator · {platformsLive.length} source{platformsLive.length>1?'s':''}
-            </span>
-          )}
-          {collectionsStatus.source === 'stale' && (
-            <span className="chip chip-neg"><Icon name="wifi-off" size={11}/> Reconnecting</span>
-          )}
-          {collectionsStatus.source === 'mock' && !collectionsStatus.loading && (
-            <span className="chip"><Icon name="database" size={11}/> Sample data</span>
-          )}
-        </div>
-        {moreAvailable && (
-          <button onClick={()=>setExpanded(x=>!x)}
-            className="text-[12px] text-ink-400 hover:text-ink-50 inline-flex items-center gap-1 transition-colors">
-            {expanded ? 'Show less' : 'View all'}
-            <Icon name={expanded ? "chevron-up" : "chevron-down"} size={12}/>
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {isInitialLoad
-          ? Array.from({length: 4}).map((_, i) => (
-              <div key={i} className="surface overflow-hidden">
-                <div className="aspect-square skel"/>
-                <div className="p-3 space-y-2">
-                  <div className="h-3 w-3/4 skel"/>
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div className="space-y-1.5"><div className="h-2 w-10 skel"/><div className="h-3 w-12 skel"/></div>
-                    <div className="space-y-1.5"><div className="h-2 w-10 skel"/><div className="h-3 w-12 skel"/></div>
-                  </div>
-                </div>
-              </div>
-            ))
-          : shown.map((c) => (
-              <button key={c.id} type="button"
-                onClick={()=>setActiveCollection(c)}
-                className="surface surface-hover overflow-hidden cursor-pointer group text-left w-full">
-                <div className="aspect-square overflow-hidden bg-hover relative">
-                  {c.image ? (
-                    <>
-                      {/* Blurred backdrop — same image, scaled + heavily blurred, fills card with the image's colors */}
-                      <img
-                        src={c.image}
-                        alt=""
-                        aria-hidden="true"
-                        loading="lazy"
-                        decoding="async"
-                        className="absolute inset-0 w-full h-full object-cover scale-125 opacity-60"
-                        style={{ filter: 'blur(24px) saturate(1.4)' }}
-                        onError={(e)=>{ e.currentTarget.style.display='none'; }}
-                      />
-                      {/* Light dark veil so the foreground reads against the haze */}
-                      <div className="absolute inset-0 pointer-events-none" style={{ background:'rgba(0,0,0,0.10)' }}/>
-                      {/* Foreground — rendered at NATURAL size (no upscale, no bicubic blur).
-                          For square 200px logos in a 280px card the image shows ~70% — crisp instead of mushy. */}
-                      <div className="absolute inset-0 flex items-center justify-center p-[10%]">
-                        <img
-                          src={c.image}
-                          alt={c.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-110 drop-shadow-lg"
-                          style={{ imageRendering: '-webkit-optimize-contrast' }}
-                          onError={(e)=>{
-                            if(c.imageLow && e.currentTarget.src !== c.imageLow){
-                              e.currentTarget.src = c.imageLow;
-                            } else {
-                              e.currentTarget.style.display='none';
-                            }
-                          }}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-ink-400">
-                      <Icon name="image" size={28}/>
-                    </div>
-                  )}
-                  {/* Soft top→bottom shade so the corner chip is readable on any image */}
-                  <div className="absolute inset-x-0 top-0 h-12 pointer-events-none"
-                    style={{background:'linear-gradient(180deg, rgba(0,0,0,0.45), transparent)'}}/>
-                  {/* Currency chip top-left */}
-                  {c.currency && (
-                    <span className="absolute top-2 left-2 chip backdrop-blur-sm text-[10px]"
-                      style={{ background:'rgba(0,0,0,0.55)', borderColor:'rgba(255,255,255,0.15)', color:'#fff' }}>
-                      {c.currency}
-                    </span>
-                  )}
-                  {/* Platform badge top-right — shows which marketplace
-                      this row came from. Tinted by platform.color so
-                      Magic Eden / Aggregated / Tensor are visually
-                      distinct at a glance. */}
-                  {c.platform && (
-                    <span className="absolute top-2 right-2 chip backdrop-blur-sm text-[10px]"
-                      style={{
-                        background:'rgba(0,0,0,0.55)',
-                        borderColor: c.platform.color + '66',
-                        color: '#fff',
-                      }}
-                      title={"Source: " + c.platform.name}>
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: c.platform.color }}/>
-                      {c.platform.name}
-                    </span>
-                  )}
-                </div>
-                <div className="p-3">
-                  <div className="text-[13px] font-semibold truncate" title={c.name}>{c.name}</div>
-                  <div className="grid grid-cols-2 gap-2 mt-2 text-[11px]">
-                    <div>
-                      <div className="text-ink-500">Floor</div>
-                      <div className="font-mono text-ink-100">{c.floor != null ? (c.floor < 0.1 ? c.floor.toFixed(4) : c.floor.toFixed(2)) + ' ' + (c.currency || 'SOL') : '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-ink-500">Volume</div>
-                      <div className="font-mono text-ink-100">{fmtSolVolume(c.volume, c.currency)}</div>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))
-        }
-      </div>
-    </div>
-  );
-}
-
-function MarketplacePage(){
-  const { setActiveNFT, showFilters, setShowFilters } = useApp();
-  const [tab, setTab] = useState("curated");
-  const [view, setView] = useState("grid");
-  const [filter, setFilter] = useState({ rarity:"All", price:[0,12], status:"All", trait:"All", market:"all" });
-  const [sort, setSort] = useState("recent");
-  const [search, setSearch] = useState("");
-  const [sortOpen, setSortOpen] = useState(false);
-  const sortRef = useRef(null);
-
-  useEffect(()=>{
-    const onClick = (e)=>{ if(sortRef.current && !sortRef.current.contains(e.target)) setSortOpen(false); };
-    document.addEventListener('mousedown', onClick);
-    return ()=> document.removeEventListener('mousedown', onClick);
-  }, []);
-
-  const filtered = useMemo(()=>{
-    let arr = NFT_GRID.filter(n => {
-      if(filter.rarity!=="All" && n.rarity!==filter.rarity) return false;
-      if(n.price < filter.price[0] || n.price > filter.price[1]) return false;
-      if(filter.status==="Auction" && !n.auction) return false;
-      if(filter.status==="Listed" && n.auction) return false;
-      if(filter.trait!=="All" && Object.values(n.traits).indexOf(filter.trait)<0) return false;
-      if(filter.market==="primary" && n.sales > 1) return false;
-      if(filter.market==="secondary" && n.sales <= 1) return false;
-      if(search && !(n.name.toLowerCase().includes(search.toLowerCase()) || n.artist.toLowerCase().includes(search.toLowerCase()))) return false;
-      if(tab==="trending" && n.likes < 300) return false;
-      if(tab==="editions" && !n.traits.Edition.includes("of")) return false;
-      return true;
-    });
-    if(sort==='price-low')  arr = arr.slice().sort((a,b)=>a.price-b.price);
-    if(sort==='price-high') arr = arr.slice().sort((a,b)=>b.price-a.price);
-    if(sort==='ending')     arr = arr.slice().sort((a,b)=>a.auctionEndsIn-b.auctionEndsIn);
-    if(sort==='sales')      arr = arr.slice().sort((a,b)=>b.sales-a.sales);
-    return arr;
-  }, [filter, sort, search, tab]);
-
-  const viewDef = MKT_VIEWS.find(v=>v.id===view) || MKT_VIEWS[0];
-
-  const [activity, setActivity] = useState(()=> Array.from({length:8}, (_,i)=>({
-    id:i, type:["Mint","Sale","Bid","List","Transfer"][i%5], nft: NFT_GRID[i%NFT_GRID.length],
-    price: parseFloat((Math.random()*4+0.2).toFixed(2)), addr: networkAddr(i*9+1), time: Date.now()-i*30000,
-  })));
-  useEffect(()=>{
-    const t = setInterval(()=>{
-      setActivity(prev => {
-        const next = { id: Date.now(), type: ["Mint","Sale","Bid","List","Transfer"][Math.floor(Math.random()*5)], nft: NFT_GRID[Math.floor(Math.random()*NFT_GRID.length)], price: parseFloat((Math.random()*4+0.2).toFixed(2)), addr: networkAddr(Date.now() & 0xffff), time: Date.now() };
-        return [next, ...prev.slice(0,11)];
+  async function loadNFTs() {
+    setLoading(true);
+    try {
+      const data = await window.NFTAggregator.fetchAllNFTs({
+        chains: filters.chains,
+        limit: 60
       });
-    }, 3200);
-    return ()=> clearInterval(t);
-  }, []);
+      setNfts(data);
+    } catch (error) {
+      console.error('Failed to load NFTs:', error);
+    }
+    setLoading(false);
+  }
+
+  const filteredNFTs = nfts.filter(nft =>
+    nft.name.toLowerCase().includes(filters.searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      {/* Featured collections (live from Magic Eden, with skeleton on first load) */}
-      <FeaturedCollections/>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold gradient-text">NFT Marketplace</h1>
+          <p className="text-ink-400 mt-1">
+            Browse {nfts.length} collections from {filters.chains.length} chains
+          </p>
+        </div>
+        <button onClick={loadNFTs} className="btn btn-secondary">
+          ↻ Refresh
+        </button>
+      </div>
 
-      {/* Curated / All / Trending / Liquid Editions */}
-      <div className="-mx-3 sm:-mx-6 px-3 sm:px-6 overflow-x-auto no-scrollbar border-b border-line">
-        <div className="flex items-center gap-5 sm:gap-7 min-w-max">
-          {MKT_TABS.map(t => (
-            <button key={t.id} onClick={()=>setTab(t.id)}
-              className={"relative py-3 text-[12.5px] uppercase tracking-[0.14em] font-semibold transition-colors "+
-                (tab===t.id ? "text-ink-50" : "text-ink-500 hover:text-ink-200")}>
-              {t.label}
-              {tab===t.id && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-ink-50 rounded-full"/>}
-            </button>
-          ))}
+      {/* Search & Filters */}
+      <div className="surface p-4 space-y-4">
+        <input
+          type="text"
+          placeholder="Search collections..."
+          value={filters.searchQuery}
+          onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
+          className="input w-full"
+        />
+
+        <div className="flex gap-2 flex-wrap">
+          {Object.values(window.NFTAggregator.NFT_CHAINS).map(chain => {
+            const isActive = filters.chains.includes(chain);
+            return (
+              <button
+                key={chain}
+                onClick={() => setFilters(prev => ({
+                  ...prev,
+                  chains: isActive
+                    ? prev.chains.filter(c => c !== chain)
+                    : [...prev.chains, chain]
+                }))}
+                className={"px-3 py-2 rounded-lg text-sm font-semibold transition-colors " +
+                  (isActive ? "bg-ink-50 text-bg" : "bg-hover text-ink-400 hover:text-ink-200")}
+              >
+                {chain.toUpperCase()}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Filter / search / view / sort row */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <button onClick={()=>setShowFilters(true)} className="w-10 h-10 rounded-full border border-line bg-surface hover:bg-hover flex items-center justify-center" aria-label="Filters">
-          <Icon name="sliders-horizontal" size={15}/>
-        </button>
-
-        <div className="flex items-center gap-1.5">
-          {[
-            ["primary","Primary Sales"],
-            ["secondary","Secondary Sales"],
-          ].map(([k,l]) => (
-            <button key={k} onClick={()=>setFilter(f=>({...f, market: f.market===k?"all":k}))}
-              className={"h-10 px-4 rounded-full text-[12.5px] font-medium border transition-colors "+
-                (filter.market===k ? "bg-ink-50 text-bg border-ink-50" : "bg-surface border-line text-ink-200 hover:bg-hover")}>
-              {l}
-            </button>
+      {/* NFT Grid */}
+      {loading ? (
+        <div className="text-center py-12 text-ink-400">Loading NFTs...</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredNFTs.map(nft => (
+            <LiveNFTCard key={nft.id} nft={nft} />
           ))}
-        </div>
-
-        <div className="flex-1 min-w-[180px] flex justify-center order-last md:order-none w-full md:w-auto">
-          <div className="relative w-full md:w-[360px] lg:w-[440px]">
-            <Icon name="search" size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500"/>
-            <input value={search} onChange={e=>setSearch(e.target.value)}
-              placeholder="Search artworks"
-              className="w-full h-10 rounded-full bg-surface border border-line pl-9 pr-3 text-[13px] text-ink-50 placeholder:text-ink-500 focus:outline-none focus:border-line-2"/>
-          </div>
-        </div>
-
-        <div className="hidden sm:flex items-center border border-line rounded-full overflow-hidden bg-surface">
-          {MKT_VIEWS.map(v => (
-            <button key={v.id} onClick={()=>setView(v.id)} title={v.id}
-              className={"w-10 h-10 flex items-center justify-center transition-colors "+
-                (view===v.id ? "text-ink-50 bg-hover" : "text-ink-500 hover:text-ink-200")}>
-              <Icon name={v.icon} size={14}/>
-            </button>
-          ))}
-        </div>
-
-        <div className="relative" ref={sortRef}>
-          <button onClick={()=>setSortOpen(o=>!o)} className="h-10 px-4 rounded-full border border-line bg-surface hover:bg-hover flex items-center gap-2 text-[12.5px]">
-            <span>{SORT_OPTIONS.find(s=>s.id===sort)?.label}</span>
-            <Icon name="arrow-down-up" size={13} className="text-ink-400"/>
-          </button>
-          {sortOpen && (
-            <div className="absolute right-0 mt-1.5 w-56 surface p-1 shadow-2xl z-30">
-              {SORT_OPTIONS.map(s => (
-                <button key={s.id} onClick={()=>{ setSort(s.id); setSortOpen(false); }}
-                  className={"w-full text-left px-3 py-2 rounded-md text-[12.5px] transition-colors "+
-                    (sort===s.id ? "bg-hover text-ink-50" : "text-ink-200 hover:bg-hover")}>
-                  {s.label}
-                </button>
-              ))}
+          {filteredNFTs.length === 0 && (
+            <div className="col-span-full surface p-10 text-center text-ink-400 text-[13px]">
+              No collections match these filters.
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Grid */}
-      <div className={"grid gap-x-5 gap-y-8 "+viewDef.cols}>
-        {filtered.map(nft => (
-          <NFTCard key={nft.id} nft={nft} onClick={()=>setActiveNFT(nft)} density={view}/>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-full surface p-10 text-center text-ink-400 text-[13px]">No artworks match these filters.</div>
-        )}
-      </div>
-
-      {/* Activity */}
-      <div className="surface">
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-line">
-          <h3 className="text-[14px] font-semibold">Activity</h3>
-          <span className="chip"><span className="dot"/> Live</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-ink-500">
-                <th className="text-left font-normal py-2 pl-4 sm:pl-5">Event</th>
-                <th className="text-left font-normal py-2">Item</th>
-                <th className="text-right font-normal py-2">Price</th>
-                <th className="text-right font-normal py-2 hidden sm:table-cell">By</th>
-                <th className="text-right font-normal py-2 pr-4 sm:pr-5">When</th>
-              </tr>
-            </thead>
-            <tbody>
-            {activity.map(a => (
-              <tr key={a.id} className="row-hover border-t border-line">
-                <td className="py-2.5 pl-4 sm:pl-5">{a.type}</td>
-                <td className="py-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-md overflow-hidden bg-hover flex-shrink-0"><NFTArt seed={a.nft.seed} w={64} h={64}/></div>
-                    <div className="min-w-0">
-                      <div className="truncate">{a.nft.name}</div>
-                      <div className="text-[11px] text-ink-500 truncate">{a.nft.artist}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-2.5 text-right font-mono">{a.price} SOL</td>
-                <td className="py-2.5 text-right font-mono text-ink-300 hidden sm:table-cell">{fmt.short(a.addr,4,4)}</td>
-                <td className="py-2.5 pr-4 sm:pr-5 text-right text-ink-500 tnum">{fmt.ago(a.time)}</td>
-              </tr>
-            ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Mobile / desktop filter sheet */}
-      {showFilters && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4" onClick={()=>setShowFilters(false)}>
-          <div className="backdrop"/>
-          <div onClick={e=>e.stopPropagation()} className="relative w-full sm:max-w-md bg-surface border border-line rounded-t-xl sm:rounded-xl max-h-[80vh] overflow-y-auto fade-in">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-line sticky top-0 bg-surface">
-              <h3 className="font-semibold text-[15px]">Filters & sort</h3>
-              <button className="btn btn-ghost btn-icon" onClick={()=>setShowFilters(false)}><Icon name="x" size={16}/></button>
-            </div>
-            <div className="p-4">
-              <FilterPanel filter={filter} setFilter={setFilter} sort={sort} setSort={setSort} count={filtered.length} total={NFT_GRID.length}/>
-              <button className="w-full btn btn-primary mt-4" onClick={()=>setShowFilters(false)}>Show {filtered.length} results</button>
-            </div>
-          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function LiveNFTCard({ nft }) {
+  return (
+    <div className="surface rounded-xl overflow-hidden hover:shadow-2xl transition-all">
+      <div className="relative aspect-square bg-hover">
+        <img
+          src={nft.image}
+          alt={nft.name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+
+        <div
+          className="absolute top-2 right-2 px-2 py-1 rounded-md text-xs font-bold text-white"
+          style={{ backgroundColor: nft.platform.color }}
+        >
+          {nft.platform.name}
+        </div>
+
+        <div className="absolute top-2 left-2 px-2 py-1 rounded-md bg-black/70 text-xs text-white">
+          {nft.chain.toUpperCase()}
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        <h3 className="font-semibold text-sm truncate">{nft.name}</h3>
+
+        <div className="flex justify-between items-end">
+          <div>
+            <div className="text-xs text-ink-500">Floor Price</div>
+            <div className="text-lg font-bold">
+              {nft.floorPrice.toFixed(3)} {nft.currency}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-ink-500">Items</div>
+            <div className="text-sm font-semibold">{nft.holders}</div>
+          </div>
+        </div>
+
+        <a
+          href={nft.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-primary w-full justify-center text-xs"
+          onClick={() => {
+            console.log('NFT Click:', nft.name, nft.platform.name);
+          }}
+        >
+          View on {nft.platform.name} ↗
+        </a>
+      </div>
     </div>
   );
 }
@@ -6247,131 +6583,62 @@ function FeesPage(){
 }
 
 /* ─────────────────────────────────────────────────────────
-   FOOTER — links + brand row + status indicator
+   FOOTER — minimal two-row layout (dashboard pattern, not
+   marketing-site columns). Brand + key links + status +
+   social on row 1; copyright + legal links on row 2.
    ───────────────────────────────────────────────────────── */
-function FooterLink({ to, href, external, children, icon }){
-  const cls = "text-[12.5px] text-ink-400 hover:text-accent transition-colors inline-flex items-center gap-1.5";
-  if(href){
-    return (
-      <a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} className={cls}>
-        {icon && <Icon name={icon} size={12}/>}
-        {children}
-        {external && <Icon name="external-link" size={10} className="text-ink-500"/>}
-      </a>
-    );
-  }
-  return (
-    <Link to={to} className={cls}>
-      {icon && <Icon name={icon} size={12}/>}
-      {children}
-    </Link>
-  );
-}
-
-function FooterColumn({ title, children }){
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.14em] text-ink-500 font-medium mb-3">{title}</div>
-      <ul className="flex flex-col gap-2">
-        {React.Children.toArray(children).map((c, i) => <li key={i}>{c}</li>)}
-      </ul>
-    </div>
-  );
-}
-
 function Footer(){
   const { config, marketStatus } = useApp();
   const year = new Date().getFullYear();
   const live = marketStatus?.source === 'live';
+  const f = config.features || {};
+  const s = config.social || {};
+  const social = SOCIAL_FIELDS.filter(x => s[x.key]);
+
+  const linkCls = "text-[12px] text-ink-400 hover:text-ink-50 transition-colors whitespace-nowrap";
   return (
     <footer className="border-t border-line bg-surface mt-8">
-      <div className="max-w-[1500px] mx-auto px-3 sm:px-6 pt-10 sm:pt-12 pb-6 sm:pb-8">
-        {/* Brand row */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
-          <div className="flex items-center gap-3">
-            <NexusLogo size={32}/>
-            <div>
-              <div className="font-semibold text-[15px] tracking-tight">{config.name}</div>
-              <div className="text-[11px] text-ink-500 mt-0.5">
-                Non-custodial · {config.network} · Open source
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-4 sm:py-5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+          <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+            <NexusLogo size={22}/>
+            <span className="font-semibold text-[13px] tracking-tight">{config.name}</span>
+            <span className="text-[11px] text-ink-500 hidden sm:inline">· {config.network}</span>
+          </Link>
+
+          <nav className="flex items-center gap-x-4 gap-y-1 flex-wrap text-[12px]">
+            {f.showSecurity && <Link to="/security" className={linkCls}>Security</Link>}
+            {f.showFees     && <Link to="/fees"     className={linkCls}>Fees</Link>}
+            {s.github       && <a href={s.github} target="_blank" rel="noreferrer" className={linkCls}>GitHub</a>}
+            <a href={"mailto:support@"+config.shortName+".io"} className={linkCls}>Support</a>
+          </nav>
+
+          <div className="flex items-center gap-2 ml-auto">
+            {live && (
+              <span className="chip chip-pos text-[10px]" title="CoinGecko live data">
+                <span className="dot pulse"/> Live
+              </span>
+            )}
+            {social.length > 0 && (
+              <div className="flex items-center gap-1">
+                {social.map(x => (
+                  <a key={x.key} href={s[x.key]} target="_blank" rel="noreferrer"
+                    title={x.label}
+                    className="w-7 h-7 rounded-full border border-line hover:bg-hover flex items-center justify-center text-ink-400 hover:text-ink-50 transition-colors">
+                    <Icon name={x.icon} size={12}/>
+                  </a>
+                ))}
               </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="chip chip-pos">
-              <span className="dot"/> All systems operational
-            </span>
-            {live && <span className="chip"><Icon name="activity" size={11}/> CoinGecko · Live</span>}
+            )}
           </div>
         </div>
 
-        {/* Link grid — Security/Fees columns gate on feature flags;
-            Connect column populates from config.social, hiding any
-            empty entries. */}
-        {(() => {
-          const f = config.features || {};
-          const s = config.social   || {};
-          const social = SOCIAL_FIELDS.filter(x => s[x.key]);
-          const columns = [];
-
-          if(f.showSecurity){
-            columns.push(
-              <FooterColumn key="sec" title="Security">
-                <FooterLink to="/security" icon="shield-check">Audits & best practices</FooterLink>
-                <FooterLink to="/security" icon="lock">Non-custodial architecture</FooterLink>
-                <FooterLink to="/security" icon="snowflake">Cold storage policy</FooterLink>
-                <FooterLink to="/security" icon="bug">Bug bounty · up to $100K</FooterLink>
-              </FooterColumn>
-            );
-          }
-          if(f.showFees){
-            columns.push(
-              <FooterColumn key="fees" title="Fees">
-                <FooterLink to="/fees" icon="percent">Trading: 0.10–0.25%</FooterLink>
-                <FooterLink to="/fees" icon="zap">Network fees</FooterLink>
-                {f.showStaking && <FooterLink to="/fees" icon="trending-up">Staking rewards · up to 18% APR</FooterLink>}
-                <FooterLink to="/fees" icon="crown">VIP program</FooterLink>
-              </FooterColumn>
-            );
-          }
-          columns.push(
-            <FooterColumn key="res" title="Resources">
-              {s.github
-                ? <FooterLink href={s.github} external icon="github">GitHub</FooterLink>
-                : <FooterLink href="#" external icon="book-open">Documentation</FooterLink>}
-              <FooterLink href="#" external icon="code">API reference</FooterLink>
-              <FooterLink href="#" external icon="activity">Status page</FooterLink>
-              <FooterLink href="#" external icon="file-text">Whitepaper</FooterLink>
-            </FooterColumn>
-          );
-          columns.push(
-            <FooterColumn key="connect" title="Connect">
-              {social.length > 0
-                ? social.map(x => <FooterLink key={x.key} href={s[x.key]} external icon={x.icon}>{x.label}</FooterLink>)
-                : <span className="text-[11.5px] text-ink-500 italic">Add social links via the admin panel (⌘+⇧+K)</span>}
-              <FooterLink href={"mailto:support@"+config.shortName+".io"} icon="mail">Support email</FooterLink>
-            </FooterColumn>
-          );
-
-          const colsClass = columns.length === 4 ? "md:grid-cols-4"
-                          : columns.length === 3 ? "md:grid-cols-3"
-                          :                        "md:grid-cols-2";
-          return (
-            <div className={"grid grid-cols-2 gap-x-6 sm:gap-x-10 gap-y-8 "+colsClass}>
-              {columns}
-            </div>
-          );
-        })()}
-
-        {/* Legal / copyright row */}
-        <div className="border-t border-line mt-10 pt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] text-ink-500">
-          <div>
-            © {year} {config.name}. Not financial advice — DYOR.
-          </div>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-            <Link to="/security" className="hover:text-ink-200">Terms of Service</Link>
-            <Link to="/security" className="hover:text-ink-200">Privacy Policy</Link>
-            <Link to="/security" className="hover:text-ink-200">Risk Disclosure</Link>
+        <div className="mt-3 pt-3 border-t border-line flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-ink-500">
+          <div>© {year} {config.name}. Not financial advice — DYOR.</div>
+          <div className="flex items-center gap-x-4 flex-wrap">
+            <Link to="/security" className="hover:text-ink-300">Terms</Link>
+            <Link to="/security" className="hover:text-ink-300">Privacy</Link>
+            <Link to="/security" className="hover:text-ink-300">Risk Disclosure</Link>
           </div>
         </div>
       </div>
