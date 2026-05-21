@@ -688,11 +688,37 @@ const MARK_PALETTE = [
   ["#e879f9","#7e22ce"],
 ];
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i))|0; return Math.abs(h); }
+
+/* Module-level memo of failed image URLs so we don't refetch broken ones
+   every render (per-instance useState would re-trigger on every mount). */
+const _brokenTokenImages = new Set();
+
 function TokenMark({ symbol, size=28 }){
+  const ctx = useContext(AppCtx);
+  const [, forceTick] = useState(0);
+  const token = useMemo(
+    () => (ctx?.tokens || []).find(t => t.symbol === symbol),
+    [ctx?.tokens, symbol]
+  );
+  const src = token?.image && !_brokenTokenImages.has(token.image) ? token.image : null;
+
+  if(src){
+    return (
+      <span className="inline-flex items-center justify-center rounded-full overflow-hidden flex-shrink-0 bg-hover"
+        style={{ width:size, height:size }}>
+        <img src={src} alt={symbol||""} width={size} height={size} loading="lazy" decoding="async"
+          onError={()=>{ _brokenTokenImages.add(src); forceTick(n=>n+1); }}
+          style={{ width:size, height:size, objectFit:'cover' }}/>
+      </span>
+    );
+  }
+
+  /* Monogram fallback — used for tokens we haven't loaded yet (initial
+     paint), the synthetic project token, and any symbol that 404s. */
   const palette = MARK_PALETTE[hashStr(symbol||"X") % MARK_PALETTE.length];
   const initials = (symbol||"?").slice(0,2).toUpperCase();
   const fs = size <= 20 ? 9 : size <= 28 ? 11 : size <= 40 ? 13 : 16;
-  const id = "tg-"+symbol;
+  const id = "tg-"+(symbol||"x");
   return (
     <span className="inline-flex items-center justify-center rounded-full overflow-hidden flex-shrink-0" style={{ width:size, height:size }}>
       <svg viewBox="0 0 40 40" width={size} height={size}>
@@ -794,6 +820,7 @@ async function fetchMarketData(){
       id:        c.id,
       symbol:    (c.symbol || "").toUpperCase(),
       name:      c.name,
+      image:     c.image || null,
       price:     Number(c.current_price) || 0,
       change:    Number(c.price_change_percentage_24h) || 0,
       mcap:      Number(c.market_cap) || 0,
@@ -1884,22 +1911,20 @@ function ThemeToggle({ className="" }){
 /* ─────────────────────────────────────────────────────────
    LAYOUT — Sidebar (drawer on mobile), Header, Main
    ───────────────────────────────────────────────────────── */
+/* Primary sidebar — 8-section product vision. Legacy routes
+   (/staking, /governance, /analytics, /security, /fees) remain
+   reachable by URL via AppRoutes but are no longer surfaced in
+   the primary nav. */
 const NAV_GROUPS = [
-  { items: [{ to:"/", label:"Overview", icon:"layout-dashboard" }] },
-  { label:"Trade", items: [
-    { to:"/marketplace", label:"NFTs",        icon:"image",       flag:"showNFTs" },
-    { to:"/analytics",   label:"Watchlist",   icon:"line-chart",  flag:"showAnalytics" },
-  ]},
-  { label:"Earn", items: [
-    { to:"/staking",     label:"Stake",       icon:"layers",      flag:"showStaking" },
-    { to:"/governance",  label:"Governance",  icon:"vote",        flag:"showGovernance" },
-  ]},
-  { label:"Resources", items: [
-    { to:"/security",    label:"Security",    icon:"shield-check", flag:"showSecurity" },
-    { to:"/fees",        label:"Fees",        icon:"percent",      flag:"showFees" },
-  ]},
-  { label:"Account", items: [
-    { to:"/profile",     label:"Portfolio",   icon:"wallet" },
+  { items: [
+    { to:"/",            label:"Dashboard",       icon:"layout-dashboard" },
+    { to:"/markets",     label:"Markets",         icon:"line-chart" },
+    { to:"/marketplace", label:"NFT Marketplace", icon:"image",           flag:"showNFTs" },
+    { to:"/swap",        label:"Swap",            icon:"arrow-down-up" },
+    { to:"/gaming",      label:"Gaming",          icon:"gamepad-2" },
+    { to:"/profile",     label:"Portfolio",       icon:"wallet" },
+    { to:"/alerts",      label:"Alerts",          icon:"bell" },
+    { to:"/premium",     label:"Premium",         icon:"sparkles" },
   ]},
 ];
 const NAV = NAV_GROUPS.flatMap(g => g.items);
@@ -2093,14 +2118,20 @@ function Sidebar(){
 function PageMeta(){
   const loc = useLocation();
   const map = {
-    "/":            { title:"Dashboard",   sub:`Welcome back to ${PROJECT_CONFIG.name}`,                  live:true },
-    "/marketplace": { title:"NFTs",         sub:"Browse, mint and trade collections",                       live:false },
-    "/staking":     { title:"Stake",        sub:"Earn rewards by locking your tokens",                      live:false },
-    "/governance":  { title:"Governance",   sub:"Vote on protocol changes with your stake",                 live:false },
-    "/analytics":   { title:"Analytics",    sub:"On-chain intelligence and trends",                         live:true  },
-    "/security":    { title:"Security",     sub:"Audits, custody model, and best practices",                live:false },
-    "/fees":        { title:"Fee Schedule", sub:"Transparent volume-tiered pricing",                        live:false },
-    "/profile":     { title:"Portfolio",    sub:"Your assets, history and settings",                        live:false },
+    "/":            { title:"Dashboard",       sub:`Welcome back to ${PROJECT_CONFIG.name}`,                  live:true  },
+    "/markets":     { title:"Markets",         sub:"Real-time prices across the top crypto tokens",           live:true  },
+    "/marketplace": { title:"NFT Marketplace", sub:"Collections aggregated from Magic Eden, Reservoir & Tensor", live:true  },
+    "/swap":        { title:"Swap",            sub:"Trade tokens at the best available rates",                live:false },
+    "/gaming":      { title:"Gaming",          sub:"CS:GO skins, game items and gaming wallets",              live:false },
+    "/profile":     { title:"Portfolio",       sub:"Your assets, transactions and settings",                  live:false },
+    "/alerts":      { title:"Alerts",          sub:"Price notifications and watchlists",                      live:false },
+    "/premium":     { title:"Premium",         sub:"Unlock advanced features",                                live:false },
+    /* Legacy routes — reachable by URL, not in primary nav */
+    "/staking":     { title:"Stake",           sub:"Earn rewards by locking your tokens",                     live:false },
+    "/governance":  { title:"Governance",      sub:"Vote on protocol changes with your stake",                live:false },
+    "/analytics":   { title:"Analytics",       sub:"On-chain intelligence and trends",                        live:true  },
+    "/security":    { title:"Security",        sub:"Audits, custody model, and best practices",               live:false },
+    "/fees":        { title:"Fee Schedule",    sub:"Transparent volume-tiered pricing",                       live:false },
   };
   return map[loc.pathname] || map["/"];
 }
@@ -3339,7 +3370,7 @@ function MarketDataChip(){
    ───────────────────────────────────────────────────────── */
 function MarketsPage(){
   return (
-    <>
+    <div className="space-y-4 lg:space-y-5">
       {/* Mobile layout */}
       <div className="lg:hidden space-y-4">
         <MobileBalanceCard/>
@@ -3360,7 +3391,10 @@ function MarketsPage(){
           <DashExploreCard/>
         </div>
       </div>
-    </>
+
+      {/* Market Index — shared mobile + desktop, sits above the footer */}
+      <MarketIndexTable/>
+    </div>
   );
 }
 
@@ -3929,6 +3963,184 @@ function DashExploreCard(){
           <rect x="34" y="28" width="32" height="14" rx="2" fill="url(#exploreG)" opacity="0.9"/>
           <circle cx="50" cy="22" r="6" fill="#c4b5fd"/>
         </svg>
+      </div>
+    </div>
+  );
+}
+
+/* ── Market Index — CMC-100-style constituent table ──────── */
+function MarketIndexTable(){
+  const { tokens } = useApp();
+  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState('all');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  // Enrich tokens with 7d % (computed from sparkline) + index weight.
+  const enriched = useMemo(()=>{
+    const real = (tokens||[]).filter(t => t.symbol !== PROJECT_CONFIG.ticker && (t.mcap||0) > 0);
+    const totalMcap = real.reduce((s,t)=> s + (t.mcap||0), 0);
+    return real.map(t => {
+      let change7d = null;
+      if(t.sparkline && t.sparkline.length > 1){
+        const first = t.sparkline[0];
+        const last  = t.sparkline[t.sparkline.length - 1];
+        if(first > 0) change7d = ((last/first) - 1) * 100;
+      }
+      return { ...t, change7d, weight: totalMcap > 0 ? (t.mcap/totalMcap)*100 : 0 };
+    });
+  }, [tokens]);
+
+  const filtered = useMemo(()=>{
+    let arr = enriched;
+    if(tab === 'gainers') arr = arr.filter(t => (t.change||0) > 0).sort((a,b)=>(b.change||0)-(a.change||0));
+    if(tab === 'losers')  arr = arr.filter(t => (t.change||0) < 0).sort((a,b)=>(a.change||0)-(b.change||0));
+    if(search.trim()){
+      const q = search.trim().toLowerCase();
+      arr = arr.filter(t => (t.name||'').toLowerCase().includes(q) || (t.symbol||'').toLowerCase().includes(q));
+    }
+    return arr;
+  }, [enriched, tab, search]);
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  useEffect(()=>{ if(page > totalPages) setPage(1); }, [totalPages, page]);
+  const visible = filtered.slice((page-1)*pageSize, page*pageSize);
+
+  const handleDownload = () => {
+    const headers = ['Rank','Symbol','Name','Price (USD)','24h %','7d %','Market Cap','Weight %'];
+    const rows = filtered.map((t,i) => [
+      i+1,
+      t.symbol,
+      `"${(t.name||'').replace(/"/g,'""')}"`,
+      (t.price||0).toFixed(t.price<1?6:2),
+      (t.change||0).toFixed(2),
+      t.change7d != null ? t.change7d.toFixed(2) : '',
+      Math.round(t.mcap||0),
+      (t.weight||0).toFixed(2),
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `market-index-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="surface p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h3 className="text-[15px] font-semibold truncate">Market Index — Top {enriched.length}</h3>
+          <span className="text-ink-500" title="Real-time data from CoinGecko"><Icon name="info" size={13}/></span>
+        </div>
+        <button onClick={handleDownload} className="btn btn-secondary text-[12px] py-1.5 px-3 inline-flex items-center gap-1.5">
+          <Icon name="download" size={12}/> Download
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
+          <Icon name="search" size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-500"/>
+          <input type="text" value={search} onChange={e=>{ setSearch(e.target.value); setPage(1); }}
+            placeholder="Search crypto" className="input w-full text-[12px] pl-7 h-9"/>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {[['all','All'],['gainers','Top Gainers'],['losers','Top Losers']].map(([k,label]) => (
+            <button key={k} onClick={()=>{ setTab(k); setPage(1); }}
+              className={"px-3 py-1.5 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-colors "+
+                (tab===k ? "bg-accent text-white" : "bg-hover text-ink-300 hover:text-ink-50")}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto -mx-4 sm:-mx-5">
+        <table className="w-full text-[12.5px]">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wider text-ink-500 border-b border-line">
+              <th className="text-left font-normal py-2 px-4 sm:px-5 w-10">#</th>
+              <th className="text-left font-normal py-2">Coin</th>
+              <th className="text-right font-normal py-2">Price</th>
+              <th className="text-right font-normal py-2">24h %</th>
+              <th className="text-right font-normal py-2 hidden sm:table-cell">7d %</th>
+              <th className="text-right font-normal py-2 hidden md:table-cell">Market Cap</th>
+              <th className="text-right font-normal py-2 px-4 sm:px-5">Weight</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((t, i) => {
+              const rank = (page-1)*pageSize + i + 1;
+              const ch24 = t.change || 0;
+              const ch7  = t.change7d;
+              return (
+                <tr key={t.symbol} className="row-hover border-b border-line last:border-0">
+                  <td className="py-2.5 px-4 sm:px-5 text-ink-400 tnum">{rank}</td>
+                  <td className="py-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <TokenMark symbol={t.symbol} size={24}/>
+                      <div className="min-w-0 truncate">
+                        <span className="font-semibold text-ink-100">{t.name}</span>
+                        <span className="text-ink-500 font-mono text-[11px] ml-1.5">{t.symbol}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-2.5 text-right font-mono tnum">{fmt.usd(t.price, t.price<1?4:2)}</td>
+                  <td className={"py-2.5 text-right font-mono tnum "+(ch24>=0?"text-pos":"text-neg")}>
+                    {ch24>=0 ? '▲' : '▼'} {Math.abs(ch24).toFixed(2)}%
+                  </td>
+                  <td className={"py-2.5 text-right font-mono tnum hidden sm:table-cell "+((ch7??0)>=0?"text-pos":"text-neg")}>
+                    {ch7 != null ? ((ch7>=0?'▲':'▼')+' '+Math.abs(ch7).toFixed(2)+'%') : <span className="text-ink-500">—</span>}
+                  </td>
+                  <td className="py-2.5 text-right font-mono tnum hidden md:table-cell">${fmt.compact(t.mcap||0)}</td>
+                  <td className="py-2.5 px-4 sm:px-5">
+                    <div className="flex items-center gap-2 justify-end">
+                      {/* Progress bar — desktop only; mobile shows just the percentage */}
+                      <div className="w-16 h-1.5 rounded-full bg-hover overflow-hidden hidden lg:block">
+                        <div className="h-full rounded-full" style={{ width: Math.min(100, t.weight)+'%', background: 'var(--accent)' }}/>
+                      </div>
+                      <span className="text-[12px] font-semibold tnum w-14 text-right">{t.weight.toFixed(2)}%</span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {visible.length === 0 && (
+              <tr><td colSpan={7} className="text-center py-8 text-[12px] text-ink-500">
+                {enriched.length === 0 ? 'Loading market data…' : 'No matching coins'}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-line gap-2 flex-wrap">
+        <div className="text-[11.5px] text-ink-500">
+          {total > 0 ? `Showing ${(page-1)*pageSize+1} to ${Math.min(page*pageSize, total)} of ${total}` : '—'}
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page<=1}
+            className="w-7 h-7 rounded-md text-ink-400 hover:bg-hover flex items-center justify-center disabled:opacity-40 disabled:hover:bg-transparent" aria-label="Previous">
+            <Icon name="chevron-left" size={13}/>
+          </button>
+          {Array.from({length: Math.min(totalPages, 5)}, (_,i)=>i+1).map(n => (
+            <button key={n} onClick={()=>setPage(n)}
+              className={"w-7 h-7 rounded-md text-[11.5px] font-semibold transition-colors "+
+                (page===n ? "bg-accent text-white" : "text-ink-400 hover:bg-hover")}>{n}</button>
+          ))}
+          {totalPages > 5 && <>
+            <span className="text-ink-500 px-1 text-[12px]">…</span>
+            <button onClick={()=>setPage(totalPages)}
+              className={"w-7 h-7 rounded-md text-[11.5px] font-semibold transition-colors "+
+                (page===totalPages ? "bg-accent text-white" : "text-ink-400 hover:bg-hover")}>{totalPages}</button>
+          </>}
+          <button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page>=totalPages}
+            className="w-7 h-7 rounded-md text-ink-400 hover:bg-hover flex items-center justify-center disabled:opacity-40 disabled:hover:bg-transparent" aria-label="Next">
+            <Icon name="chevron-right" size={13}/>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -6679,6 +6891,101 @@ function Shell(){
   );
 }
 
+/* ─────────────────────────────────────────────────────────
+   ROUTE PAGES — Markets / Swap / Coming-soon placeholders
+   ───────────────────────────────────────────────────────── */
+function TokenMarketsPage(){
+  const { marketStatus } = useApp();
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <MarketIndexTable/>
+      <p className="text-[11px] text-ink-500 text-center">
+        Data from CoinGecko · refreshes every 30s
+        {marketStatus?.source === 'stale' && ' · last update is stale, retrying'}
+      </p>
+    </div>
+  );
+}
+
+function SwapPage(){
+  return (
+    <div className="max-w-xl mx-auto">
+      <SwapWidget/>
+    </div>
+  );
+}
+
+const COMING_SOON = {
+  gaming: {
+    icon:'gamepad-2',
+    title:'Gaming',
+    desc:'Track CS:GO skins, game items, and gaming-token portfolios from a single dashboard.',
+    items:[
+      'CS:GO skin marketplace (Skinport, BUFF, DMarket aggregation)',
+      'Steam inventory price tracking',
+      'Gaming-token portfolio (AXS, GMT, IMX, ENJ)',
+    ],
+  },
+  alerts: {
+    icon:'bell',
+    title:'Price Alerts',
+    desc:'Get notified the moment an asset hits your target.',
+    items:[
+      'Custom price triggers per token',
+      'Whale-movement alerts (large transfers, exchange flows)',
+      'Multi-channel delivery — email, browser push, mobile',
+    ],
+  },
+  premium: {
+    icon:'sparkles',
+    title:'NEXUS Premium',
+    desc:'Power-user features for serious traders and on-chain analysts.',
+    items:[
+      'Unlimited price alerts and watchlists',
+      'Multi-wallet portfolio aggregation',
+      'Tax reporting export (CSV / Form 8949 / Koinly compatible)',
+      'API access + higher rate limits',
+      'Ad-free experience',
+    ],
+  },
+};
+
+function ComingSoonPage({ kind }){
+  const m = COMING_SOON[kind] || COMING_SOON.gaming;
+  const { pushToast } = useApp();
+  return (
+    <div className="surface p-8 sm:p-10 max-w-2xl mx-auto mt-6 text-center">
+      <span className="inline-flex w-14 h-14 rounded-2xl items-center justify-center"
+        style={{ background:'var(--primary-soft)', color:'var(--accent)' }}>
+        <Icon name={m.icon} size={28}/>
+      </span>
+      <h2 className="text-[22px] sm:text-[24px] font-bold tracking-tight mt-4">{m.title}</h2>
+      <p className="text-[13px] sm:text-[14px] text-ink-400 mt-2 max-w-md mx-auto">{m.desc}</p>
+
+      <div className="surface-2 p-4 sm:p-5 mt-6 text-left">
+        <div className="text-[10px] uppercase tracking-[0.12em] text-ink-500 font-semibold mb-3">Coming soon</div>
+        <ul className="space-y-2.5 text-[13px]">
+          {m.items.map(x => (
+            <li key={x} className="flex items-start gap-2.5">
+              <span className="text-accent mt-0.5 flex-shrink-0"><Icon name="check" size={13}/></span>
+              <span className="text-ink-100">{x}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+        <button
+          onClick={()=>pushToast({ kind:'success', title:"You're on the list", body:`We'll notify you when ${m.title} launches.` })}
+          className="btn btn-primary">
+          <Icon name="bell" size={13}/> Notify me
+        </button>
+        <Link to="/" className="btn btn-secondary">Back to Dashboard</Link>
+      </div>
+    </div>
+  );
+}
+
 /* Routes live inside their own component so they re-evaluate when
    admin-panel feature toggles flip — disabled features get pruned
    from the route table and the catch-all redirects to /. */
@@ -6688,14 +6995,21 @@ function AppRoutes(){
   return (
     <Routes>
       <Route element={<Shell/>}>
-        <Route path="/" element={<MarketsPage/>}/>
-        {f.showNFTs       && <Route path="/marketplace" element={<MarketplacePage/>}/>}
-        {f.showStaking    && <Route path="/staking"     element={<StakingPage/>}/>}
-        {f.showGovernance && <Route path="/governance"  element={<GovernancePage/>}/>}
-        {f.showAnalytics  && <Route path="/analytics"   element={<AnalyticsPage/>}/>}
-        {f.showSecurity   && <Route path="/security"    element={<SecurityPage/>}/>}
-        {f.showFees       && <Route path="/fees"        element={<FeesPage/>}/>}
+        {/* 8-section primary nav */}
+        <Route path="/"        element={<MarketsPage/>}/>
+        <Route path="/markets" element={<TokenMarketsPage/>}/>
+        {f.showNFTs && <Route path="/marketplace" element={<MarketplacePage/>}/>}
+        <Route path="/swap"    element={<SwapPage/>}/>
+        <Route path="/gaming"  element={<ComingSoonPage kind="gaming"/>}/>
         <Route path="/profile" element={<ProfilePage/>}/>
+        <Route path="/alerts"  element={<ComingSoonPage kind="alerts"/>}/>
+        <Route path="/premium" element={<ComingSoonPage kind="premium"/>}/>
+        {/* Legacy routes — reachable by URL but not in primary nav */}
+        {f.showStaking    && <Route path="/staking"    element={<StakingPage/>}/>}
+        {f.showGovernance && <Route path="/governance" element={<GovernancePage/>}/>}
+        {f.showAnalytics  && <Route path="/analytics"  element={<AnalyticsPage/>}/>}
+        {f.showSecurity   && <Route path="/security"   element={<SecurityPage/>}/>}
+        {f.showFees       && <Route path="/fees"       element={<FeesPage/>}/>}
         <Route path="*" element={<MarketsPage/>}/>
       </Route>
     </Routes>
