@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fetchTopMarkets } from "@/lib/data-sources/coingecko";
+import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
+import { fetchAllNftCollections } from "@/lib/data-sources/nft-aggregate";
+import { fetchActiveMarkets } from "@/lib/data-sources/polymarket";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
  * The one route GitHub Actions calls on a schedule (.github/workflows/poller.yml).
- * Stub for now (Days 1-2 goal: prove the clock works before it does real
- * work) — real upstream fetches land in lib/data-sources/* on Days 3-4 and
- * get wired in here.
+ * Fetches every upstream source in parallel (Promise.allSettled — one dead
+ * source never sinks the others, same resilience shape as the legacy NFT
+ * aggregator) and upserts normalized rows into the Supabase cache tables
+ * from supabase/migrations/0001_init.sql. ISR pages read those tables, not
+ * the upstream APIs, so traffic never scales upstream API usage.
  *
- * Secret-gated so this can't be hit/abused by the public: GitHub Actions
- * sends the shared secret as a bearer token, matched against
- * POLL_SECRET (set in both Vercel env and the repo's GitHub Actions secrets).
+ * TODO (Days 9-10): evaluate alert_rules against the data just written,
+ * send Telegram messages via lib/telegram/bot.ts.
  */
 export async function POST(request: NextRequest) {
   const auth = request.headers.get("authorization");
@@ -24,14 +30,85 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  // TODO (Days 3-4): Promise.allSettled fan-out to lib/data-sources/*,
-  // upsert into Supabase cache tables, revalidatePath the affected pages.
-  // TODO (Days 9-10): evaluate alert_rules against freshly written data,
-  // send Telegram messages via lib/telegram/bot.ts.
+  const [markets, listings, nfts, predictions] = await Promise.all([
+    fetchTopMarkets(100),
+    fetchNewTokenProfiles(20),
+    fetchAllNftCollections(60),
+    fetchActiveMarkets(50),
+  ]);
+
+  const summary = {
+    coingecko_markets: markets.length,
+    dexscreener_listings: listings.length,
+    nft_collections: nfts.length,
+    prediction_markets: predictions.length,
+  };
+
+  let dbWrite: "ok" | "skipped" | "failed" = "skipped";
+  let dbError: string | null = null;
+
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const supabase = getSupabaseServerClient();
+      const fetchedAt = new Date().toISOString();
+
+      await Promise.all([
+        markets.length &&
+          supabase.from("listings_cache").upsert(
+            markets.map((m) => ({
+              id: m.id,
+              source: m.source,
+              symbol: m.symbol,
+              name: m.name,
+              data: m,
+              fetched_at: fetchedAt,
+            }))
+          ),
+        listings.length &&
+          supabase.from("listings_cache").upsert(
+            listings.map((l) => ({
+              id: l.id,
+              source: l.source,
+              symbol: l.symbol,
+              name: l.name,
+              data: l,
+              fetched_at: fetchedAt,
+            }))
+          ),
+        nfts.length &&
+          supabase.from("nft_cache").upsert(
+            nfts.map((n) => ({
+              id: n.id,
+              source: n.source,
+              chain: n.chain,
+              name: n.name,
+              data: n,
+              fetched_at: fetchedAt,
+            }))
+          ),
+        predictions.length &&
+          supabase.from("prediction_markets_cache").upsert(
+            predictions.map((p) => ({
+              slug: p.slug,
+              question: p.question,
+              data: p,
+              fetched_at: fetchedAt,
+            }))
+          ),
+      ]);
+      dbWrite = "ok";
+    } catch (err) {
+      dbWrite = "failed";
+      dbError = err instanceof Error ? err.message : String(err);
+      console.error("[poll] Supabase write failed", err);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     ranAt: new Date().toISOString(),
-    sources: [],
-    note: "poll route stub — no data sources wired yet",
+    sources: summary,
+    dbWrite,
+    dbError,
   });
 }
