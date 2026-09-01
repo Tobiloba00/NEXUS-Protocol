@@ -1,20 +1,19 @@
 "use client";
 
-import { useBinanceTicker } from "@/lib/exchanges/useBinanceTicker";
+import { useLiveTicker } from "@/lib/exchanges/useLiveTicker";
 import { LiveStatusChip, type LiveStatus } from "@/components/status/LiveStatusChip";
 
-/** "connecting" (no message received yet at all) maps to "mock" — the chip's
- * "mock" state means "never reached live", which is exactly true until the
- * first real tick arrives; "stale" is reserved for "was live, dropped". */
-function toChipStatus(wsStatus: "live" | "stale" | "connecting", hasTicker: boolean): LiveStatus {
-  if (wsStatus === "live" && hasTicker) return "live";
-  if (wsStatus === "stale" && hasTicker) return "stale";
+/** "connecting" (no message received yet, from either exchange) maps to
+ * "mock" — the chip's "mock" state means "never reached live", exactly
+ * true until the first real tick arrives from either source. */
+function toChipStatus(wsStatus: "live" | "stale" | "connecting"): LiveStatus {
+  if (wsStatus === "live") return "live";
+  if (wsStatus === "stale") return "stale";
   return "mock";
 }
 
 export function LiveTicker({
   symbol,
-  base,
   quote,
   seedPrice,
 }: {
@@ -23,9 +22,8 @@ export function LiveTicker({
   quote: string;
   seedPrice?: number | null;
 }) {
-  const { ticker, status } = useBinanceTicker(symbol);
-  const price = ticker?.price ?? seedPrice ?? null;
-  const changePct = ticker?.changePct24h;
+  const { price: livePrice, changePct24h, status, source } = useLiveTicker(symbol);
+  const price = livePrice ?? seedPrice ?? null;
 
   return (
     <div className="flex items-center gap-3">
@@ -35,13 +33,13 @@ export function LiveTicker({
           : "—"}
         <span className="ml-1 text-base font-normal text-ink-400">{quote}</span>
       </span>
-      {changePct !== undefined && (
-        <span className={`text-sm font-medium ${changePct >= 0 ? "text-pos" : "text-neg"}`}>
-          {changePct >= 0 ? "+" : ""}
-          {changePct.toFixed(2)}%
+      {changePct24h !== null && (
+        <span className={`text-sm font-medium ${changePct24h >= 0 ? "text-pos" : "text-neg"}`}>
+          {changePct24h >= 0 ? "+" : ""}
+          {changePct24h.toFixed(2)}%
         </span>
       )}
-      <LiveStatusChip status={toChipStatus(status, ticker !== null)} source={`Binance ${base}/${quote}`} />
+      <LiveStatusChip status={toChipStatus(status)} source={source ?? undefined} />
     </div>
   );
 }
