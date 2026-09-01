@@ -1,0 +1,27 @@
+name: Poller
+
+# Vercel Hobby's built-in cron is capped at once/day (too slow for
+# near-real-time listing/NFT/alert refresh), so GitHub Actions is the
+# "clock" instead. This workflow does no work itself — it just calls the
+# app's own secret-gated poll route, which does the actual fetch/cache/
+# alert-evaluation logic server-side. Requires two repo secrets:
+#   SITE_URL     e.g. https://nexus-protocol.vercel.app
+#   POLL_SECRET  same value as the Vercel env var of the same name
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger poll route
+        run: |
+          curl --fail --silent --show-error \
+            -X POST "${SITE_URL}/api/internal/poll" \
+            -H "Authorization: Bearer ${POLL_SECRET}" \
+            -H "Content-Type: application/json"
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          POLL_SECRET: ${{ secrets.POLL_SECRET }}

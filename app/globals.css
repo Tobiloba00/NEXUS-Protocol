@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/*
+ * Theme system ported from the legacy single-file app (legacy/index.html:116-264).
+ * Same idea: CSS custom properties hold every color, Tailwind utility classes
+ * resolve through them (via @theme inline below), and rebrand/theme changes
+ * are just var updates — no rebuild needed. Dark is the default palette;
+ * light overrides via both prefers-color-scheme AND [data-theme] so a
+ * manual toggle can win over system preference.
+ */
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface-2: #181822;
+  --raised: #1c1c28;
+  --hover: #22222f;
+  --line: #26262f;
+  --line-2: #2f2f3a;
+
+  --ink-50: #f5f5f7;
+  --ink-100: #e4e4e9;
+  --ink-200: #c7c7d1;
+  --ink-300: #a3a3b0;
+  --ink-400: #888897;
+  --ink-500: #6b6b78;
+  --ink-600: #4d4d58;
+
+  --accent: #8b5cf6;
+  --accent-hi: #a78bfa;
+  --accent-2: #22d3ee;
+  --accent-3: #f472b6;
+
+  --pos: #22c55e;
+  --neg: #ef4444;
+  --warn: #f59e0b;
+
+  --backdrop: rgba(5, 5, 10, 0.72);
+  --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --grid-line: rgba(255, 255, 255, 0.06);
+
+  --primary-soft: rgba(139, 92, 246, 0.12);
+  --primary-grad: linear-gradient(135deg, var(--accent), var(--accent-2));
+  --primary-grad-hi: linear-gradient(135deg, var(--accent-hi), var(--accent-2));
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-2: #f4f4f6;
+    --raised: #ffffff;
+    --hover: #f0f0f3;
+    --line: #e4e4e9;
+    --line-2: #d4d4dc;
+
+    --ink-50: #16161d;
+    --ink-100: #262631;
+    --ink-200: #45454f;
+    --ink-300: #63636e;
+    --ink-400: #85858f;
+    --ink-500: #9d9da6;
+    --ink-600: #c1c1c8;
+
+    --backdrop: rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.12);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --grid-line: rgba(0, 0, 0, 0.06);
+    --primary-soft: rgba(139, 92, 246, 0.08);
+  }
+}
+
+:root[data-theme="light"] {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f6;
+  --raised: #ffffff;
+  --hover: #f0f0f3;
+  --line: #e4e4e9;
+  --line-2: #d4d4dc;
+
+  --ink-50: #16161d;
+  --ink-100: #262631;
+  --ink-200: #45454f;
+  --ink-300: #63636e;
+  --ink-400: #85858f;
+  --ink-500: #9d9da6;
+  --ink-600: #c1c1c8;
+
+  --backdrop: rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --grid-line: rgba(0, 0, 0, 0.06);
+  --primary-soft: rgba(139, 92, 246, 0.08);
+}
+
+/* Tailwind v4 CSS-first theme: map utility tokens (bg-surface, text-ink-400, ...)
+   straight onto the CSS vars above, so admin-panel rebrands propagate without
+   a rebuild — same trick the legacy app used with the Tailwind CDN's inline config. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+
+  --color-ink-50: var(--ink-50);
+  --color-ink-100: var(--ink-100);
+  --color-ink-200: var(--ink-200);
+  --color-ink-300: var(--ink-300);
+  --color-ink-400: var(--ink-400);
+  --color-ink-500: var(--ink-500);
+  --color-ink-600: var(--ink-600);
+
+  --color-accent: var(--accent);
+  --color-accent-hi: var(--accent-hi);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
+
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-warn: var(--warn);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-xl2: 16px;
+}
+
+html {
+  color-scheme: dark light;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink-50);
+}
+
+::selection {
+  background: var(--primary-soft);
+}

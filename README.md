@@ -1,181 +1,38 @@
 # NEXUS Protocol
 
-A production-grade Web3 dashboard — markets, NFTs, staking, governance, analytics, and wallet — in a single static HTML file with React, Tailwind CSS, and live on-chain data.
+One free, real-time dashboard for crypto prices & charts, new coin listings,
+NFT floor prices, and prediction-market odds — with Telegram alerts and
+SEO-first pages, built entirely on free-tier services.
 
-- **Live data** from three free public APIs (CoinGecko, CoinGecko NFTs, solana.fm) with graceful fallbacks
-- **Light / dark / auto** theme system with no-FOUC persistence
-- **Hidden admin panel** (`Ctrl/Cmd + Shift + K`) for live rebranding
-- **3 one-click brand presets** included (NEXUS / CHRONOS / VERTEX)
-- **Fully responsive** — sidebar drawer + bottom tabs on mobile, sheet filters, hideable table columns
-- **No build step** — open `index.html` in a browser and it just works
+This is a from-scratch Next.js rebuild of the previous single-file app
+(preserved at [`legacy/`](legacy/) for reference — it's a no-build,
+Babel-in-browser React app with zero server rendering, which is why it was
+replaced: real SEO needs server-rendered HTML).
 
----
+## Stack
 
-## Quick start
+- **Next.js** (App Router, TypeScript, Tailwind v4) — deployed on Vercel (free Hobby tier)
+- **Supabase** (free Postgres) — cached upstream data + Telegram alert state
+- **GitHub Actions** — the scheduled "clock" that refreshes caches and evaluates alerts (Vercel Hobby cron is capped at once/day, too slow for this)
+- **Binance / Bybit public WebSockets** — live prices, connected to directly from the browser
+- **CoinGecko, DexScreener, Magic Eden, Reservoir, Tensor, Polymarket Gamma** — free/keyless REST APIs, polled server-side and cached (never hit per-visitor)
+- **Telegram Bot API** — free alert delivery
 
-```bash
-node server.js
-# → http://localhost:5173
-```
-
-That's it. The bundled `server.js` is a 30-line static file server using Node's built-in `http` + `fs` (no `npm install`). You can also just open `index.html` directly via `file://` — the only thing you lose is correct MIME types for the favicon.
-
----
-
-## Architecture
-
-- **Single-file HTML/JSX** — `index.html` ships everything: theme variables, Tailwind config, React app via Babel standalone, Recharts for charts, Lucide for icons. All third-party libs are loaded from CDN.
-- **HashRouter** so routes work without server-side rewrite rules — drop on any static host.
-- **Live data** from three free public APIs (see below). Each has try/catch + graceful fallback to mock data, so the page is never empty.
-- **No build step by design.** Open `index.html` in a text editor, change a value, refresh. The single file is the deliverable.
-
----
-
-## Rebrand in 30 seconds
-
-### Option A — Live admin panel (recommended)
-
-Press **Ctrl/Cmd + Shift + K** to open the rebrand console:
-
-- Edit name, ticker, network, primary/secondary color, logo (emoji or URL)
-- 3 one-click presets (NEXUS / CHRONOS / VERTEX)
-- **Export** your settings to a JSON file
-- **Import** any of the JSON files in `presets/` (or one you've exported)
-- Live color preview while the panel is open
-- Changes persist in `localStorage` and apply before first paint on reload
-
-### Option B — Edit `PROJECT_CONFIG`
-
-Open `index.html`, find the `PROJECT_CONFIG` block (~line 500), edit:
-
-```js
-const PROJECT_CONFIG = {
-  name: "Your Protocol",
-  shortName: "yours",
-  ticker: "YRX",
-  network: "Solana",
-  contract: "...",
-  features: { showNFTs: true, showStaking: true, showGovernance: true, showAnalytics: true },
-  brand: { primary: "#8b5cf6", secondary: "#22d3ee", logo: "" },
-};
-```
-
-Save, refresh. Done.
-
-### Option C — Load a preset
-
-The `presets/` folder has three ready-to-go JSON configs:
-- `nexus-demo.json` — purple / cyan
-- `chronos-demo.json` — pink / violet, ⏳ logo
-- `vertex-demo.json` — green / cyan, 📈 logo
-
-Open the admin panel → Import → pick any of them.
-
----
-
-## Theme
-
-- **Default**: light mode for first-time visitors
-- **Toggle** in the header cycles `Auto → Light → Dark → Auto`
-- Choice persists in `localStorage.nexus-theme`
-- Pre-React script applies the saved theme before first paint to prevent FOUC
-
----
-
-## API endpoints
-
-| Source | Endpoint | Refresh | Free-tier limit | Purpose |
-|---|---|---|---|---|
-| CoinGecko | `/api/v3/coins/markets` | 30s | 30/min | Token prices, market cap, 7-day sparklines |
-| CoinGecko NFTs | `/api/v3/nfts/list` | 60s | 30/min | Featured collection floor + 24h volume |
-| solana.fm | `/v0/transfers/latest` | 15s | None published | Live Solana transfers |
-| Solana RPC | `getSignaturesForAddress` | 15s | Public RPC fair-use | Activity fallback when solana.fm is 5xx |
-
-Every fetch has try/catch + fallback. If a source is unreachable the relevant card shows a chip:
-
-- 🟢 `Live · CoinGecko` / `Live · solana.fm` — fresh data
-- 🔴 `Reconnecting` — last refresh failed, showing previous good data
-- ⚪ `Sample data` — never reached the upstream, showing mock
-
----
-
-## Deploy
-
-### Vercel
+## Local dev
 
 ```bash
-vercel
-# accept defaults
+npm install
+cp .env.example .env.local   # fill in Supabase + poll-secret + Telegram values as they come online
+npm run dev
 ```
 
-Vercel auto-detects this as a static project. The included `server.js` is only for local dev and is skipped by Vercel's static build. For a custom domain, configure it in the Vercel dashboard.
+## Architecture at a glance
 
-### Netlify
+- Pages that need to rank in search (`/price/[pair]`, `/nft/[collection]`, `/predictions/[slug]`, listing indexes) are SSG+ISR, reading from a Supabase cache table — never calling upstream APIs per request.
+- `app/api/internal/poll/route.ts` is the one route that does real upstream work: fetches all sources, writes normalized rows to Supabase, evaluates Telegram alert rules. `.github/workflows/poller.yml` hits it on a schedule with a shared secret.
+- Live price ticks are a client-side WebSocket straight to the exchange — no backend in that path at all.
+- The branding/admin panel (`Ctrl/Cmd+Shift+K`, once ported) and the light/dark/auto theme system are carried over conceptually from the legacy app's `PROJECT_CONFIG`/CSS-variable approach — see `lib/config/project-config.ts`.
 
-```bash
-netlify deploy --dir=. --prod
-```
+## Status
 
-Or drag-and-drop the project folder into Netlify's deploys page.
-
-### GitHub Pages
-
-Push to a repo → Settings → Pages → Source: `main` / root. Available at `https://<user>.github.io/<repo>/`.
-
-### Cloudflare Pages / S3 / any static host
-
-Upload `index.html`, `favicon.svg`, and (optionally) the `presets/` folder. No build command needed.
-
----
-
-## CORS
-
-All four upstream APIs serve CORS for browser fetches as of writing. If you deploy behind a corporate proxy or VPN that strips CORS headers, the fallback chain (Solana RPC → mock) keeps the UI working without a visible break.
-
----
-
-## Mobile / responsiveness
-
-- Sidebar → off-canvas drawer on `<lg` (1024px) with backdrop and body-scroll-lock
-- Bottom tab bar on mobile (`<lg`)
-- Marketplace filters → bottom sheet
-- Tables hide non-essential columns at `sm` / `md` via Tailwind's `hidden sm:table-cell`
-- Modals → bottom sheets on mobile, dialogs on desktop
-- `viewport-fit=cover` + `env(safe-area-inset-bottom)` on the mobile tabs for iOS home indicator
-
----
-
-## Browser support
-
-Modern Chromium, Firefox, and Safari (last 2 years). The app uses:
-
-- CSS `color-mix()`, `backdrop-filter`, CSS variables in `<stop-color>` — all evergreen-browser features
-- ES2020+ syntax via Babel standalone (in-browser transpile — no build pipeline)
-- `localStorage` for theme + brand config persistence
-
----
-
-## Project structure
-
-```
-NEXUS-Protocol/
-├── index.html          # the entire app — React, styles, mock data
-├── server.js           # 30-line Node static server for local dev
-├── favicon.svg         # the NEXUS "N" mark, theme-aware
-├── presets/
-│   ├── nexus-demo.json
-│   ├── chronos-demo.json
-│   └── vertex-demo.json
-├── README.md
-└── .gitignore
-```
-
----
-
-## Keyboard shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `/` or `Ctrl/Cmd + K` | Open search |
-| `Ctrl/Cmd + Shift + K` | Open admin rebrand panel |
-| `Esc` | Close any open modal |
+Infra skeleton stage: Next.js scaffold, theme + branding system ported, Supabase schema drafted, poll-route + GitHub Actions clock wired (stub — no data sources yet). Data-source modules, live charts, NFT/prediction UI, Telegram bot, and the SEO layer land next per the build plan.
