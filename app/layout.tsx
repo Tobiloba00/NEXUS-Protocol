@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppConfigProvider } from "@/components/config/AppConfigProvider";
+import { SiteHeader } from "@/components/nav/SiteHeader";
 import { CONFIG_STORAGE_KEY, THEME_STORAGE_KEY } from "@/lib/config/project-config";
 
 const geistSans = Geist({
@@ -61,7 +62,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
       </head>
       <body className="min-h-full flex flex-col bg-bg text-ink-50">
-        <AppConfigProvider>{children}</AppConfigProvider>
+        <AppConfigProvider>
+          <SiteHeader />
+          {children}
+        </AppConfigProvider>
       </body>
     </html>
   );
