@@ -16,6 +16,7 @@ const BASE = "https://gamma-api.polymarket.com";
 type GammaMarket = {
   slug: string;
   question: string;
+  image?: string;
   outcomes?: string; // JSON-encoded string array, e.g. '["Yes","No"]'
   outcomePrices?: string; // JSON-encoded string array of probabilities, e.g. '["0.04","0.96"]'
   volume?: string;
@@ -50,6 +51,7 @@ export async function fetchActiveMarkets(limit = 50): Promise<PredictionMarket[]
       return {
         slug: r.slug,
         question: r.question,
+        image: r.image ?? null,
         outcomes: labels.map((label, i) => ({
           label,
           probability: prices[i] !== undefined ? Number(prices[i]) : null,

@@ -26,6 +26,7 @@ type DexPair = {
   priceChange?: { h24?: number };
   marketCap?: number;
   fdv?: number;
+  info?: { imageUrl?: string };
 };
 
 export async function fetchNewTokenProfiles(limit = 20): Promise<Listing[]> {
@@ -67,6 +68,7 @@ async function enrichToken(chainId: string, address: string): Promise<Listing | 
       source: "dexscreener",
       symbol: pair.baseToken.symbol,
       name: pair.baseToken.name,
+      image: pair.info?.imageUrl ?? null,
       priceUsd: pair.priceUsd ? Number(pair.priceUsd) : null,
       change24hPct: pair.priceChange?.h24 ?? null,
       marketCapUsd: pair.marketCap ?? pair.fdv ?? null,

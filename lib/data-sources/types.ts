@@ -6,6 +6,7 @@ export type Listing = {
   source: "coingecko" | "dexscreener";
   symbol: string;
   name: string;
+  image: string | null;
   priceUsd: number | null;
   change24hPct: number | null;
   marketCapUsd: number | null;
@@ -27,6 +28,7 @@ export type NftCollection = {
 export type PredictionMarket = {
   slug: string;
   question: string;
+  image: string | null;
   outcomes: { label: string; probability: number | null }[];
   volumeUsd: number | null;
   liquidityUsd: number | null;

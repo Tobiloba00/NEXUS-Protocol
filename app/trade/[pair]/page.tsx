@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPairBySlug, LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
-import { fetchOhlc } from "@/lib/data-sources/coingecko";
+import { fetchOhlc, fetchTopMarkets } from "@/lib/data-sources/coingecko";
 import { PriceChart, type SeedCandle } from "@/components/charts/PriceChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
+import { TokenIcon } from "@/components/ui/TokenIcon";
 
 // Classic ISR (Cache Components is not enabled in next.config.ts — see
 // README/commit history): prerender the launch pairs at build time,
@@ -35,7 +36,11 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
   const config = getPairBySlug(pair);
   if (!config) notFound();
 
-  const ohlc = await fetchOhlc(config.coingeckoId, 1);
+  const [ohlc, markets] = await Promise.all([
+    fetchOhlc(config.coingeckoId, 1),
+    fetchTopMarkets(100),
+  ]);
+  const icon = markets.find((m) => m.id === config.coingeckoId)?.image ?? null;
   const seed: SeedCandle[] = ohlc.map(([time, open, high, low, close]) => ({
     time: Math.floor(time / 1000) as SeedCandle["time"],
     open,
@@ -48,9 +53,12 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-12">
       <div>
-        <h1 className="text-xl font-semibold">
-          {config.base}/{config.quote}
-        </h1>
+        <div className="flex items-center gap-2">
+          <TokenIcon src={icon} alt={config.base} size={28} />
+          <h1 className="text-xl font-semibold">
+            {config.base}/{config.quote}
+          </h1>
+        </div>
         <div className="mt-2">
           <LiveTicker
             key={config.binanceSymbol}

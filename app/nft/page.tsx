@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
 import { fetchAllNftCollections } from "@/lib/data-sources/nft-aggregate";
+import { TokenIcon } from "@/components/ui/TokenIcon";
+import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
 
 export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "NFT Marketplace",
   description: "NFT collection floor prices aggregated across marketplaces, updated automatically.",
+};
+
+const SOURCE_LABEL: Record<string, string> = {
+  magiceden: "Magic Eden",
+  reservoir: "Reservoir",
+  tensor: "Tensor",
 };
 
 export default async function NftPage() {
@@ -17,27 +25,18 @@ export default async function NftPage() {
       <p className="text-sm text-ink-400">Floor prices via Magic Eden (Solana).</p>
       <ul className="mt-4 grid gap-3 sm:grid-cols-2">
         {collections.map((c) => (
-          <li key={c.id}>
-            <a
-              href={c.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 rounded-xl2 border border-line bg-surface p-3 hover:bg-hover"
-            >
-              {c.image && (
-                // Magic Eden serves images from many different CDNs per
-                // collection — not worth a next.config.ts remotePatterns
-                // allowlist for a v1 list page; plain <img> is fine here.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.image} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{c.name}</div>
-                <div className="text-xs text-ink-400">
-                  Floor: {c.floorPrice !== null ? `${c.floorPrice.toFixed(2)} ${c.currency}` : "—"}
-                </div>
+          <li
+            key={c.id}
+            className="flex items-center gap-3 rounded-xl2 border border-line bg-surface p-3"
+          >
+            <TokenIcon src={c.image} alt={c.name} size={48} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">{c.name}</div>
+              <div className="text-xs text-ink-400">
+                Floor: {c.floorPrice !== null ? `${c.floorPrice.toFixed(2)} ${c.currency}` : "—"}
               </div>
-            </a>
+            </div>
+            <ExternalLinkBadge href={c.link} label={SOURCE_LABEL[c.source] ?? c.source} />
           </li>
         ))}
         {collections.length === 0 && (

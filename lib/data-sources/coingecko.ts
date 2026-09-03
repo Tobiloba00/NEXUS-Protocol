@@ -32,6 +32,7 @@ export async function fetchTopMarkets(perPage = 100): Promise<Listing[]> {
       id: string;
       symbol: string;
       name: string;
+      image?: string;
       current_price: number | null;
       price_change_percentage_24h: number | null;
       market_cap: number | null;
@@ -42,6 +43,7 @@ export async function fetchTopMarkets(perPage = 100): Promise<Listing[]> {
       source: "coingecko" as const,
       symbol: r.symbol.toUpperCase(),
       name: r.name,
+      image: r.image ?? null,
       priceUsd: r.current_price,
       change24hPct: r.price_change_percentage_24h,
       marketCapUsd: r.market_cap,
