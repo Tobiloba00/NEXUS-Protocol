@@ -4,6 +4,7 @@ import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
 import { fetchAllNftCollections } from "@/lib/data-sources/nft-aggregate";
 import { fetchActiveMarkets } from "@/lib/data-sources/polymarket";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { evaluatePriceAlerts } from "@/lib/alerts/evaluate";
 
 /**
  * The one route GitHub Actions calls on a schedule (.github/workflows/poller.yml).
@@ -13,8 +14,8 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
  * from supabase/migrations/0001_init.sql. ISR pages read those tables, not
  * the upstream APIs, so traffic never scales upstream API usage.
  *
- * TODO (Days 9-10): evaluate alert_rules against the data just written,
- * send Telegram messages via lib/telegram/bot.ts.
+ * Also evaluates price-threshold alert rules against the fresh CoinGecko
+ * data (lib/alerts/evaluate.ts) and sends any that crossed via Telegram.
  */
 export async function POST(request: NextRequest) {
   const auth = request.headers.get("authorization");
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
 
   let dbWrite: "ok" | "skipped" | "failed" = "skipped";
   let dbError: string | null = null;
+  let alerts: { evaluated: number; fired: number } | "skipped" = "skipped";
 
   if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
@@ -97,6 +99,10 @@ export async function POST(request: NextRequest) {
           ),
       ]);
       dbWrite = "ok";
+
+      // Runs after the cache writes so a rule that just fires reads the
+      // same fresh prices ISR pages will also see next request.
+      alerts = await evaluatePriceAlerts(markets);
     } catch (err) {
       dbWrite = "failed";
       dbError = err instanceof Error ? err.message : String(err);
@@ -110,5 +116,6 @@ export async function POST(request: NextRequest) {
     sources: summary,
     dbWrite,
     dbError,
+    alerts,
   });
 }

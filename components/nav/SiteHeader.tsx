@@ -23,6 +23,9 @@ export function SiteHeader() {
           <Link href="/predictions" className="hover:text-ink-50">
             Predictions
           </Link>
+          <Link href="/alerts" className="hover:text-ink-50">
+            Alerts
+          </Link>
         </nav>
       </div>
     </header>

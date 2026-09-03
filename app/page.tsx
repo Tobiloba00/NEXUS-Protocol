@@ -16,6 +16,7 @@ const LIVE_ROUTES: Partial<Record<(typeof FEATURE_FLAGS)[number]["key"], string>
   showListings: "/new-listings",
   showNFTs: "/nft",
   showPredictions: "/predictions",
+  showAlerts: "/alerts",
 };
 
 export default function Home() {
@@ -24,8 +25,8 @@ export default function Home() {
       <div className="w-full max-w-3xl">
         <h1 className="mb-2 text-2xl font-semibold tracking-tight">NEXUS Protocol</h1>
         <p className="mb-10 max-w-xl text-ink-300">
-          One dashboard for live crypto prices, new listings, NFT floors, and prediction-market
-          odds — all real data. Telegram alerts land next.
+          One dashboard for live crypto prices, new listings, NFT floors, prediction-market odds,
+          and Telegram price alerts — all real data, free.
         </p>
         <ul className="grid gap-3 sm:grid-cols-2">
           {FEATURE_FLAGS.map((f) => {
