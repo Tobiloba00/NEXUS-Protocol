@@ -4,12 +4,15 @@
 export type Listing = {
   id: string; // stable key: coingecko coin id, or a dexscreener token address
   source: "coingecko" | "dexscreener";
+  chain: string | null; // e.g. "solana", "ethereum" — dexscreener rows only
   symbol: string;
   name: string;
   image: string | null;
   priceUsd: number | null;
   change24hPct: number | null;
   marketCapUsd: number | null;
+  liquidityUsd: number | null;
+  pairCreatedAt: number | null; // epoch ms — dexscreener rows only
   link: string;
 };
 

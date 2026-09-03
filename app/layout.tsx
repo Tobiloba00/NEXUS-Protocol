@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppConfigProvider } from "@/components/config/AppConfigProvider";
-import { SiteHeader } from "@/components/nav/SiteHeader";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { TopBar } from "@/components/layout/TopBar";
+import { MobileTopBar, MobileBottomNav } from "@/components/layout/MobileNav";
 import { CONFIG_STORAGE_KEY, THEME_STORAGE_KEY } from "@/lib/config/project-config";
 
 const geistSans = Geist({
@@ -61,10 +63,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
       </head>
-      <body className="min-h-full flex flex-col bg-bg text-ink-50">
+      <body className="min-h-full bg-bg text-ink-50">
         <AppConfigProvider>
-          <SiteHeader />
-          {children}
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <MobileTopBar />
+              <TopBar />
+              <main className="flex-1 pb-16 lg:pb-0">{children}</main>
+              <MobileBottomNav />
+            </div>
+          </div>
         </AppConfigProvider>
       </body>
     </html>

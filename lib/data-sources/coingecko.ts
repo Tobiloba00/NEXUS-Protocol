@@ -41,12 +41,15 @@ export async function fetchTopMarkets(perPage = 100): Promise<Listing[]> {
     return rows.map((r) => ({
       id: r.id,
       source: "coingecko" as const,
+      chain: null,
       symbol: r.symbol.toUpperCase(),
       name: r.name,
       image: r.image ?? null,
       priceUsd: r.current_price,
       change24hPct: r.price_change_percentage_24h,
       marketCapUsd: r.market_cap,
+      liquidityUsd: null,
+      pairCreatedAt: null,
       link: `https://www.coingecko.com/en/coins/${r.id}`,
     }));
   } catch (err) {

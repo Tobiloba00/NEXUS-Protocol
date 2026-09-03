@@ -119,6 +119,7 @@
   --color-accent-hi: var(--accent-hi);
   --color-accent-2: var(--accent-2);
   --color-accent-3: var(--accent-3);
+  --color-accent-soft: var(--primary-soft);
 
   --color-pos: var(--pos);
   --color-neg: var(--neg);

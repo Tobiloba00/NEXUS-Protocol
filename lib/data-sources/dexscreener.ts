@@ -26,6 +26,8 @@ type DexPair = {
   priceChange?: { h24?: number };
   marketCap?: number;
   fdv?: number;
+  liquidity?: { usd?: number };
+  pairCreatedAt?: number;
   info?: { imageUrl?: string };
 };
 
@@ -66,12 +68,15 @@ async function enrichToken(chainId: string, address: string): Promise<Listing | 
     return {
       id: `${chainId}:${address}`,
       source: "dexscreener",
+      chain: chainId,
       symbol: pair.baseToken.symbol,
       name: pair.baseToken.name,
       image: pair.info?.imageUrl ?? null,
       priceUsd: pair.priceUsd ? Number(pair.priceUsd) : null,
       change24hPct: pair.priceChange?.h24 ?? null,
       marketCapUsd: pair.marketCap ?? pair.fdv ?? null,
+      liquidityUsd: pair.liquidity?.usd ?? null,
+      pairCreatedAt: pair.pairCreatedAt ?? null,
       link: `https://dexscreener.com/${chainId}/${address}`,
     };
   } catch {

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
     .from("telegram_subscribers")
-    .select("chat_id")
+    .select("chat_id, username")
     .eq("link_code", code)
     .not("linked_at", "is", null)
     .maybeSingle();
@@ -24,5 +24,5 @@ export async function GET(request: NextRequest) {
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, chatId: data?.chat_id ?? null });
+  return NextResponse.json({ ok: true, chatId: data?.chat_id ?? null, username: data?.username ?? null });
 }
