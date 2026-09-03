@@ -14,6 +14,15 @@ export function SiteHeader() {
           <Link href="/markets" className="hover:text-ink-50">
             Markets
           </Link>
+          <Link href="/new-listings" className="hover:text-ink-50">
+            New Listings
+          </Link>
+          <Link href="/nft" className="hover:text-ink-50">
+            NFTs
+          </Link>
+          <Link href="/predictions" className="hover:text-ink-50">
+            Predictions
+          </Link>
         </nav>
       </div>
     </header>

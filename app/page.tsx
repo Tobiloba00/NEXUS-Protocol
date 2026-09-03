@@ -13,6 +13,9 @@ export const metadata: Metadata = {
 // spirit: never claim more than what's actually there.
 const LIVE_ROUTES: Partial<Record<(typeof FEATURE_FLAGS)[number]["key"], string>> = {
   showPrices: "/markets",
+  showListings: "/new-listings",
+  showNFTs: "/nft",
+  showPredictions: "/predictions",
 };
 
 export default function Home() {
@@ -22,7 +25,7 @@ export default function Home() {
         <h1 className="mb-2 text-2xl font-semibold tracking-tight">NEXUS Protocol</h1>
         <p className="mb-10 max-w-xl text-ink-300">
           One dashboard for live crypto prices, new listings, NFT floors, and prediction-market
-          odds. Live prices are real and streaming now; the rest are landing over the next few days.
+          odds — all real data. Telegram alerts land next.
         </p>
         <ul className="grid gap-3 sm:grid-cols-2">
           {FEATURE_FLAGS.map((f) => {
