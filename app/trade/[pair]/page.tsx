@@ -5,6 +5,8 @@ import { fetchOhlc, fetchTopMarkets } from "@/lib/data-sources/coingecko";
 import { PriceChart, type SeedCandle } from "@/components/charts/PriceChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { TokenIcon } from "@/components/ui/TokenIcon";
+import { OrderBook } from "@/components/trading/OrderBook";
+import { TradeTape } from "@/components/trading/TradeTape";
 
 // Classic ISR (Cache Components is not enabled in next.config.ts — see
 // README/commit history): prerender the launch pairs at build time,
@@ -69,8 +71,14 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
           />
         </div>
       </div>
-      <div className="rounded-xl2 border border-line bg-surface p-2">
-        <PriceChart key={config.binanceSymbol} symbol={config.binanceSymbol} seed={seed} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
+        <div className="rounded-xl2 border border-line bg-surface p-2">
+          <PriceChart key={config.binanceSymbol} symbol={config.binanceSymbol} seed={seed} />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
+          <OrderBook key={`${config.binanceSymbol}-book`} symbol={config.binanceSymbol} />
+          <TradeTape key={`${config.binanceSymbol}-tape`} symbol={config.binanceSymbol} />
+        </div>
       </div>
     </main>
   );

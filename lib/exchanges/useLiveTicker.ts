@@ -73,7 +73,7 @@ export function useLiveTicker(symbol: string) {
     const unsubscribeBybitRef: { current: null | (() => void) } = { current: null };
     const bybitTimer = setTimeout(() => {
       if (activeSourceRef.current) return; // something already came through
-      unsubscribeBybitRef.current = bybitWs.subscribe(symbol, applyBybit);
+      unsubscribeBybitRef.current = bybitWs.subscribe(symbol, ["tickers"], { ticker: applyBybit });
     }, BYBIT_FALLBACK_AFTER_MS);
 
     // Last resort: neither exchange WS spoke within 10s — poll our own

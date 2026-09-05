@@ -6,8 +6,11 @@
  * subscriber in the tab, not one socket per chart/ticker.
  *
  * Streams used:
- *  - <symbol>@ticker   -> 24h rolling ticker (price, % change) for ticker UI
- *  - <symbol>@kline_1m -> live-updating 1m candle for chart append
+ *  - <symbol>@ticker         -> 24h rolling ticker (price, % change) for ticker UI
+ *  - <symbol>@kline_1m       -> live-updating 1m candle for chart append
+ *  - <symbol>@depth20@100ms  -> top-20 order book snapshot, self-contained
+ *    (no diff/snapshot reconciliation needed, unlike the raw @depth stream)
+ *  - <symbol>@trade          -> individual trade prints, for a trade tape
  *
  * This module must only ever run in the browser — it's imported solely
  * from "use client" components and only touches `WebSocket` inside
@@ -31,10 +34,26 @@ export type BinanceKline = {
   isClosed: boolean;
 };
 
+export type BinanceDepth = {
+  bids: [price: number, qty: number][]; // best bid first
+  asks: [price: number, qty: number][]; // best ask first
+};
+
+export type BinanceTrade = {
+  price: number;
+  qty: number;
+  time: number;
+  side: "buy" | "sell"; // "buy" = a market buy lifted the ask (taker was a buyer)
+};
+
 type Listener = {
   ticker?: (t: BinanceTicker) => void;
   kline?: (k: BinanceKline) => void;
+  depth?: (d: BinanceDepth) => void;
+  trade?: (t: BinanceTrade) => void;
 };
+
+export type BinanceStream = "ticker" | "kline_1m" | "depth20@100ms" | "trade";
 
 const WS_BASE = "wss://stream.binance.com:9443/stream";
 const RECONNECT_BASE_DELAY_MS = 1000;
@@ -119,6 +138,23 @@ class BinanceWsManager {
             isClosed: k.x,
           };
           listeners.forEach((l) => l.kline?.(kline));
+        } else if (streamKey.includes("@depth")) {
+          const depth: BinanceDepth = {
+            bids: (data.bids as [string, string][]).map(([p, q]) => [Number(p), Number(q)]),
+            asks: (data.asks as [string, string][]).map(([p, q]) => [Number(p), Number(q)]),
+          };
+          listeners.forEach((l) => l.depth?.(depth));
+        } else if (streamKey.endsWith("@trade")) {
+          const trade: BinanceTrade = {
+            price: Number(data.p),
+            qty: Number(data.q),
+            time: data.T,
+            // Binance's `m` = "is the buyer the market maker". If the buyer
+            // was the maker, the trade was initiated by a seller hitting
+            // the bid — so m:true means the taker/aggressor sold.
+            side: data.m ? "sell" : "buy",
+          };
+          listeners.forEach((l) => l.trade?.(trade));
         }
       } catch (err) {
         console.warn("[binance-ws] failed to parse message", err);
@@ -153,7 +189,7 @@ class BinanceWsManager {
   /** Subscribe to a symbol's ticker and/or kline stream. Returns an
    * unsubscribe function. Reconnects with the full updated stream list
    * whenever the subscription set changes. */
-  subscribe(symbol: string, streams: ("ticker" | "kline_1m")[], listener: Listener): () => void {
+  subscribe(symbol: string, streams: BinanceStream[], listener: Listener): () => void {
     const lowerSymbol = symbol.toLowerCase();
     const keys = streams.map((s) => `${lowerSymbol}@${s}`);
     let needsReconnect = false;
