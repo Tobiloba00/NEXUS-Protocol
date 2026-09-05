@@ -1,6 +1,7 @@
 "use client";
 
 import { useLiveTicker } from "@/lib/exchanges/useLiveTicker";
+import { usePriceFlash } from "@/lib/exchanges/usePriceFlash";
 import { LiveStatusChip, type LiveStatus } from "@/components/status/LiveStatusChip";
 
 /** "connecting" (no message received yet, from either exchange) maps to
@@ -11,6 +12,11 @@ function toChipStatus(wsStatus: "live" | "stale" | "connecting"): LiveStatus {
   if (wsStatus === "stale") return "stale";
   return "mock";
 }
+
+const FLASH_CLASS: Record<"up" | "down", string> = {
+  up: "bg-pos-soft text-pos",
+  down: "bg-neg-soft text-neg",
+};
 
 export function LiveTicker({
   symbol,
@@ -24,10 +30,15 @@ export function LiveTicker({
 }) {
   const { price: livePrice, changePct24h, status, source } = useLiveTicker(symbol);
   const price = livePrice ?? seedPrice ?? null;
+  const flash = usePriceFlash(price);
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-3xl font-semibold tabular-nums">
+      <span
+        className={`rounded-md px-1.5 py-0.5 text-3xl font-semibold tabular-nums transition-colors duration-300 ${
+          flash ? FLASH_CLASS[flash] : ""
+        }`}
+      >
         {price !== null
           ? price.toLocaleString(undefined, { maximumFractionDigits: price < 1 ? 6 : 2 })
           : "—"}

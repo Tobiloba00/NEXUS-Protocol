@@ -8,6 +8,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { TopMovers } from "@/components/dashboard/TopMovers";
 import { MiniPriceChart } from "@/components/charts/MiniPriceChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
+import { CompactPrice } from "@/components/charts/CompactPrice";
 import { TokenIcon } from "@/components/ui/TokenIcon";
 import type { SeedCandle } from "@/components/charts/PriceChart";
 
@@ -108,11 +109,11 @@ export default async function Home() {
                     <span className="flex-1 text-sm font-medium">
                       {pair.base}/{pair.quote}
                     </span>
-                    <span className="text-sm tabular-nums text-ink-300">
-                      {m?.priceUsd !== undefined && m?.priceUsd !== null
-                        ? `$${m.priceUsd.toLocaleString()}`
-                        : "—"}
-                    </span>
+                    <CompactPrice
+                      key={pair.binanceSymbol}
+                      symbol={pair.binanceSymbol}
+                      seedPrice={m?.priceUsd ?? null}
+                    />
                   </Link>
                 </li>
               );
