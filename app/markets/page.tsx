@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 import { getMarkets } from "@/lib/data/cache";
+import { fetchGlobalStats, fetchFearGreed } from "@/lib/data-sources/global-stats";
 import { Page, PageHeader } from "@/components/layout/Page";
 import { CompactPrice } from "@/components/charts/CompactPrice";
+import { MarketPulse } from "@/components/dashboard/MarketPulse";
+import { TopMovers } from "@/components/dashboard/TopMovers";
 import { TokenIcon } from "@/components/ui/TokenIcon";
 
 export const revalidate = 300; // just for the icon/name lookup — prices themselves are live via WS
@@ -14,11 +17,22 @@ export const metadata: Metadata = {
 };
 
 export default async function MarketsPage() {
-  const { data: markets } = await getMarkets(100);
+  const [{ data: markets }, stats, fearGreed] = await Promise.all([
+    getMarkets(100),
+    fetchGlobalStats(),
+    fetchFearGreed(),
+  ]);
   const byCoinId = new Map(markets.map((m) => [m.id, m]));
 
   return (
-    <Page narrow>
+    <Page
+      aside={
+        <>
+          <MarketPulse stats={stats} fearGreed={fearGreed} />
+          <TopMovers markets={markets} />
+        </>
+      }
+    >
       <PageHeader title="Markets" subtitle="Real-time prices, straight from the exchange. Tap a pair for its full chart." />
       <ul className="group-card" style={{ "--sep-inset": "68px" } as React.CSSProperties}>
         {LAUNCH_PAIRS.map((pair) => {

@@ -106,7 +106,39 @@ export default function AlertsPage() {
     "w-full bg-transparent text-right text-[16px] tracking-[-0.01em] text-ink-50 outline-none placeholder:text-ink-500";
 
   return (
-    <Page narrow>
+    <Page
+      aside={
+        <>
+          <section className="group-card flex flex-col gap-4 p-5">
+            <h2 className="t-headline">How it works</h2>
+            <ol className="flex flex-col gap-3.5">
+              {[
+                ["Connect", "Link your Telegram once — no password, no email."],
+                ["Choose a price", "Pick a pair and a level to watch, above or below."],
+                ["Get the message", "We send it to Telegram as soon as the price crosses."],
+              ].map(([title, body], i) => (
+                <li key={title} className="flex gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13px] font-semibold text-accent">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <div className="text-[15px] font-semibold tracking-[-0.01em]">{title}</div>
+                    <div className="text-[13.5px] leading-snug text-ink-400">{body}</div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+          <section className="group-card flex flex-col gap-2 p-5">
+            <h2 className="t-headline">Good to know</h2>
+            <p className="text-[14px] leading-relaxed text-ink-300">
+              Each alert fires once and then switches off. Prices are checked every few minutes, so a very brief
+              spike can slip through.
+            </p>
+          </section>
+        </>
+      }
+    >
       <PageHeader title="Alerts" subtitle="Free price alerts, delivered to you on Telegram." />
 
       {!chatId ? (
