@@ -4,6 +4,8 @@ import { fetchOhlc } from "@/lib/data-sources/coingecko";
 import { getMarkets, getNewListings } from "@/lib/data/cache";
 import { fetchGlobalStats, fetchFearGreed } from "@/lib/data-sources/global-stats";
 import { fetchCrowdLadder } from "@/lib/data-sources/polymarket";
+import { getLatestBrief } from "@/lib/ai/brief";
+import { BriefCard } from "@/components/dashboard/BriefCard";
 import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 import { Page, PageHeader } from "@/components/layout/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -57,13 +59,14 @@ function Pulse({
 }
 
 export default async function Home() {
-  const [{ data: markets }, ohlc, globalStats, fearGreed, { data: listings }, ladder] = await Promise.all([
+  const [{ data: markets }, ohlc, globalStats, fearGreed, { data: listings }, ladder, brief] = await Promise.all([
     getMarkets(100),
     fetchOhlc("bitcoin", 1),
     fetchGlobalStats(),
     fetchFearGreed(),
     getNewListings(8),
     fetchCrowdLadder("Bitcoin"),
+    getLatestBrief(),
   ]);
 
   const btc = markets.find((m) => m.id === "bitcoin");
@@ -78,6 +81,8 @@ export default async function Home() {
   return (
     <Page>
       <PageHeader title="Markets" subtitle="Crypto, NFTs and prediction odds — live, in one place." />
+
+      {brief && <BriefCard brief={brief} />}
 
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[22px] bg-line lg:grid-cols-4">
         <Pulse

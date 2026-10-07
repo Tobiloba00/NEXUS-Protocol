@@ -5,6 +5,7 @@ import { fetchAllNftCollections } from "@/lib/data-sources/nft-aggregate";
 import { fetchActiveMarkets } from "@/lib/data-sources/polymarket";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { evaluatePriceAlerts } from "@/lib/alerts/evaluate";
+import { ensureTodaysBrief } from "@/lib/ai/brief";
 import type { Listing } from "@/lib/data-sources/types";
 
 /**
@@ -23,7 +24,7 @@ import type { Listing } from "@/lib/data-sources/types";
  * logged to poll_runs for the admin health view.
  */
 
-const GROUPS = ["markets", "listings", "nft", "predictions"] as const;
+const GROUPS = ["markets", "listings", "nft", "predictions", "brief"] as const;
 type Group = (typeof GROUPS)[number];
 
 type GroupResult = {
@@ -101,6 +102,19 @@ export async function POST(request: NextRequest) {
   }
 
   const tasks: Record<Group, () => Promise<GroupResult & { data: unknown[] }>> = {
+    // Once per UTC day (a no-op on every other run): the AI-written home-page brief.
+    brief: async () => {
+      const started = Date.now();
+      const r = await ensureTodaysBrief();
+      const ok = r.status !== "unavailable";
+      return {
+        status: ok ? "ok" : "empty",
+        rows: r.status === "generated" ? 1 : 0,
+        ms: Date.now() - started,
+        error: ok ? null : (r.detail ?? "brief unavailable"),
+        data: [],
+      };
+    },
     markets: async () => {
       const r = await run(
         () => fetchTopMarkets(100),

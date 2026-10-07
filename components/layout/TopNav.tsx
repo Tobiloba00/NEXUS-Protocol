@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell } from "lucide-react";
+import { Bell, MessageCircle } from "lucide-react";
 import { Logo } from "./Logo";
 import { SiteSearch } from "./SiteSearch";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -42,6 +42,13 @@ export function TopNav() {
           <div className="hidden w-[220px] md:block">
             <SiteSearch />
           </div>
+          <Link
+            href="/ask"
+            className="press flex h-9 w-9 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
+            aria-label="Ask Nexus"
+          >
+            <MessageCircle className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          </Link>
           <Link
             href="/alerts"
             className="press flex h-9 w-9 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"

@@ -29,9 +29,9 @@ jobs:
       - name: Trigger poll route
         run: |
           case "$SCHEDULE" in
-            "*/15 * * * *") GROUPS_PARAM="markets,nft" ;;
+            "*/15 * * * *") GROUPS_PARAM="markets,nft,brief" ;;
             "*/5 * * * *")  GROUPS_PARAM="listings,predictions" ;;
-            *)              GROUPS_PARAM="markets,listings,nft,predictions" ;;
+            *)              GROUPS_PARAM="markets,listings,nft,predictions,brief" ;;
           esac
           curl --fail --silent --show-error --max-time 55 \
             -X POST "${SITE_URL}/api/internal/poll?groups=${GROUPS_PARAM}" \
