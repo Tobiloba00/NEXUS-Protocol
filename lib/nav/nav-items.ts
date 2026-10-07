@@ -1,36 +1,24 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, TrendingUp, ChartCandlestick, Sparkles, Image, Vote, Bell } from "lucide-react";
+import { House, ChartNoAxesCombined, Sparkles, Image, Vote, Bell } from "lucide-react";
 
 export type NavItem = { label: string; href: string; icon: LucideIcon };
-export type NavGroup = { label: string | null; items: NavItem[] };
 
-/** Single source of truth for the sidebar and mobile bottom nav, so they
- * can't drift out of sync with each other. */
-export const NAV_GROUPS: NavGroup[] = [
-  { label: null, items: [{ label: "Overview", href: "/", icon: LayoutDashboard }] },
-  {
-    label: "Markets",
-    items: [
-      { label: "Markets", href: "/markets", icon: TrendingUp },
-      { label: "Trade", href: "/trade/btc-usdt", icon: ChartCandlestick },
-    ],
-  },
-  {
-    label: "Discover",
-    items: [
-      { label: "New Listings", href: "/new-listings", icon: Sparkles },
-      { label: "NFTs", href: "/nft", icon: Image },
-      { label: "Predictions", href: "/predictions", icon: Vote },
-    ],
-  },
-  { label: "Tools", items: [{ label: "Alerts", href: "/alerts", icon: Bell }] },
+/** Single source of truth for the top nav and the mobile tab bar. */
+export const NAV_ITEMS: NavItem[] = [
+  { label: "Home", href: "/", icon: House },
+  { label: "Markets", href: "/markets", icon: ChartNoAxesCombined },
+  { label: "New", href: "/new-listings", icon: Sparkles },
+  { label: "NFTs", href: "/nft", icon: Image },
+  { label: "Predictions", href: "/predictions", icon: Vote },
+  { label: "Alerts", href: "/alerts", icon: Bell },
 ];
 
-/** Flat list, for the mobile bottom tab bar (fewer slots, so it's a curated
- * subset rather than every group). */
-export const MOBILE_TABS: NavItem[] = [
-  NAV_GROUPS[0].items[0],
-  NAV_GROUPS[1].items[0],
-  NAV_GROUPS[1].items[1],
-  NAV_GROUPS[3].items[0],
-];
+/** Five slots, like an iOS tab bar. Alerts lives in the mobile top bar. */
+export const MOBILE_TABS: NavItem[] = NAV_ITEMS.slice(0, 5);
+
+export function isNavActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  // /trade/* belongs to Markets
+  if (href === "/markets") return pathname === "/markets" || pathname.startsWith("/trade/");
+  return pathname === href || pathname.startsWith(href + "/");
+}

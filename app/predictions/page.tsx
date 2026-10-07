@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getPredictionMarkets } from "@/lib/data/cache";
+import { Page, PageHeader } from "@/components/layout/Page";
 import { PredictionsList } from "@/components/predictions/PredictionsList";
 
 export const revalidate = 300;
@@ -14,15 +15,12 @@ export default async function PredictionsPage() {
   const { data: markets } = await getPredictionMarkets(40);
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
-      <div>
-        <h1 className="text-xl font-semibold">Prediction Markets</h1>
-        <p className="mt-1 text-sm text-ink-400">
-          Real-time odds from Polymarket. Informational only — we don&apos;t facilitate wagering; the
-          badge on each market links out if you want to trade.
-        </p>
-      </div>
+    <Page narrow>
+      <PageHeader
+        title="Predictions"
+        subtitle="Live odds from Polymarket. Informational only — we don't take bets; each market links out if you want to trade."
+      />
       <PredictionsList markets={markets} />
-    </main>
+    </Page>
   );
 }

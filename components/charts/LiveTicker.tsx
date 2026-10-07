@@ -1,7 +1,7 @@
 "use client";
 
 import { useLiveTicker } from "@/lib/exchanges/useLiveTicker";
-import { usePriceFlash } from "@/lib/exchanges/usePriceFlash";
+import { ChangePill } from "@/components/ui/ChangePill";
 import { LiveStatusChip, type LiveStatus } from "@/components/status/LiveStatusChip";
 
 /** "connecting" (no message received yet, from either exchange) maps to
@@ -13,11 +13,9 @@ function toChipStatus(wsStatus: "live" | "stale" | "connecting"): LiveStatus {
   return "mock";
 }
 
-const FLASH_CLASS: Record<"up" | "down", string> = {
-  up: "bg-pos-soft text-pos",
-  down: "bg-neg-soft text-neg",
-};
-
+/** The page's headline number: big, tight-tracked, and calm. It updates in
+ * place with no flashing — at this size the change itself is the signal; the
+ * per-tick tint lives on the small numbers in lists (CompactPrice). */
 export function LiveTicker({
   symbol,
   quote,
@@ -30,26 +28,20 @@ export function LiveTicker({
 }) {
   const { price: livePrice, changePct24h, status, source } = useLiveTicker(symbol);
   const price = livePrice ?? seedPrice ?? null;
-  const flash = usePriceFlash(price);
 
   return (
-    <div className="flex items-center gap-3">
-      <span
-        className={`rounded-md px-1.5 py-0.5 text-3xl font-semibold tabular-nums transition-colors duration-300 ${
-          flash ? FLASH_CLASS[flash] : ""
-        }`}
-      >
-        {price !== null
-          ? price.toLocaleString(undefined, { maximumFractionDigits: price < 1 ? 6 : 2 })
-          : "—"}
-        <span className="ml-1 text-base font-normal text-ink-400">{quote}</span>
-      </span>
-      {changePct24h !== null && (
-        <span className={`text-sm font-medium ${changePct24h >= 0 ? "text-pos" : "text-neg"}`}>
-          {changePct24h >= 0 ? "+" : ""}
-          {changePct24h.toFixed(2)}%
+    <div className="flex flex-col items-start gap-2">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span
+          className={`text-[44px] font-bold leading-none tracking-[-0.045em] tabular-nums sm:text-[60px]`}
+        >
+          {price !== null
+            ? price.toLocaleString("en-US", { maximumFractionDigits: price < 1 ? 6 : 2 })
+            : "—"}
         </span>
-      )}
+        <span className="text-[17px] font-medium text-ink-400">{quote}</span>
+        <ChangePill pct={changePct24h} className="self-center" />
+      </div>
       <LiveStatusChip status={toChipStatus(status)} source={source ?? undefined} />
     </div>
   );

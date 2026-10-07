@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CandlestickSeries, createChart, type IChartApi, type UTCTimestamp } from "lightweight-charts";
+import {
+  CandlestickSeries,
+  ColorType,
+  createChart,
+  type IChartApi,
+  type ISeriesApi,
+  type UTCTimestamp,
+} from "lightweight-charts";
 import { binanceWs } from "@/lib/exchanges/binance-ws";
+import { useChartTheme } from "@/lib/client/useChartTheme";
 
 export type SeedCandle = {
   time: UTCTimestamp; // seconds
@@ -17,12 +25,14 @@ export type SeedCandle = {
  * real content on first paint / for crawlers — see the /trade/[pair] page)
  * and live-updated by appending Binance kline ticks on top. Chart updates
  * are imperative (series.update()), not React state, since re-rendering a
- * whole chart component per tick would be needlessly expensive — this is
- * the same reason charting libraries generally expose an imperative API.
+ * whole chart component per tick would be needlessly expensive. Colors come
+ * from the design tokens and re-apply when the theme changes.
  */
 export function PriceChart({ symbol, seed }: { symbol: string; seed: SeedCandle[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const theme = useChartTheme();
 
   useEffect(() => {
     const container = containerRef.current;
@@ -30,27 +40,23 @@ export function PriceChart({ symbol, seed }: { symbol: string; seed: SeedCandle[
 
     const chart = createChart(container, {
       autoSize: true,
-      layout: {
-        background: { color: "transparent" },
-        textColor: "#a3a3b0",
+      layout: { background: { type: ColorType.Solid, color: "transparent" }, fontSize: 12, attributionLogo: false },
+      localization: {
+        priceFormatter: (p: number) =>
+          p.toLocaleString("en-US", { maximumFractionDigits: p >= 1000 ? 0 : p >= 1 ? 2 : 6 }),
       },
-      grid: {
-        vertLines: { color: "rgba(255,255,255,0.06)" },
-        horzLines: { color: "rgba(255,255,255,0.06)" },
-      },
-      timeScale: { timeVisible: true, secondsVisible: false },
+      grid: { vertLines: { visible: false } },
+      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.08 } },
+      timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
     });
     chartRef.current = chart;
 
-    const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#22c55e",
-      downColor: "#ef4444",
-      borderVisible: false,
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
-    });
-
-    if (seed.length) series.setData(seed);
+    const series = chart.addSeries(CandlestickSeries, { borderVisible: false });
+    seriesRef.current = series;
+    if (seed.length) {
+      series.setData(seed);
+      chart.timeScale().fitContent(); // otherwise candles bunch up on the right edge
+    }
 
     const unsubscribeKline = binanceWs.subscribe(symbol, ["kline_1m"], {
       kline: (k) => {
@@ -68,12 +74,25 @@ export function PriceChart({ symbol, seed }: { symbol: string; seed: SeedCandle[
       unsubscribeKline();
       chart.remove();
       chartRef.current = null;
+      seriesRef.current = null;
     };
-    // seed is only used to prime initial data on mount, not tracked as a
-    // live dependency — re-seeding on every reference change would tear
-    // down and rebuild the whole chart for no visual benefit.
+    // seed only primes initial data on mount; re-seeding on every reference
+    // change would tear down and rebuild the whole chart for no visual benefit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol]);
 
-  return <div ref={containerRef} className="h-[420px] w-full" />;
+  useEffect(() => {
+    chartRef.current?.applyOptions({
+      layout: { textColor: theme.text },
+      grid: { horzLines: { color: theme.grid } },
+    });
+    seriesRef.current?.applyOptions({
+      upColor: theme.up,
+      downColor: theme.down,
+      wickUpColor: theme.up,
+      wickDownColor: theme.down,
+    });
+  }, [theme]);
+
+  return <div ref={containerRef} className="h-[360px] w-full sm:h-[460px]" />;
 }

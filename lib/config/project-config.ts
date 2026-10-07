@@ -65,9 +65,12 @@ export const DEFAULT_CONFIG: ProjectConfig = {
   shortName: "nexus",
   ticker: "NEX",
   network: "Multi-chain",
+  // The default accent is the iOS system blue; globals.css defines it per
+  // theme (#007aff light / #0a84ff dark), so applyBrandColors only writes
+  // an inline override when a visitor picked a non-default brand color.
   brand: {
-    primary: "#8b5cf6",
-    secondary: "#22d3ee",
+    primary: "#0a84ff",
+    secondary: "#5ac8fa",
     logo: "",
   },
   features: {
@@ -97,7 +100,7 @@ export const CONFIG_PRESETS: Record<
     shortName: "nexus",
     ticker: "NEX",
     network: "Multi-chain",
-    brand: { primary: "#8b5cf6", secondary: "#22d3ee", logo: "" },
+    brand: { primary: "#0a84ff", secondary: "#5ac8fa", logo: "" },
   },
   chronos: {
     name: "Chronos",
@@ -121,6 +124,9 @@ export const THEME_STORAGE_KEY = "nexus-theme";
 /** CSS var writes ported from applyBrandColors (legacy/index.html:642-656). */
 export function applyBrandColors(brand: ProjectConfig["brand"]) {
   const root = document.documentElement;
-  root.style.setProperty("--accent", brand.primary);
-  root.style.setProperty("--accent-2", brand.secondary);
+  // Default brand = let the theme's own accent (globals.css) show through.
+  if (brand.primary === DEFAULT_CONFIG.brand.primary) root.style.removeProperty("--accent");
+  else root.style.setProperty("--accent", brand.primary);
+  if (brand.secondary === DEFAULT_CONFIG.brand.secondary) root.style.removeProperty("--accent-2");
+  else root.style.setProperty("--accent-2", brand.secondary);
 }

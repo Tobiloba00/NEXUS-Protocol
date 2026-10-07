@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getNftCollections } from "@/lib/data/cache";
+import { Page, PageHeader } from "@/components/layout/Page";
 import { NftGrid } from "@/components/nft/NftGrid";
 
 export const revalidate = 300;
@@ -13,12 +14,9 @@ export default async function NftPage() {
   const { data: collections } = await getNftCollections(40);
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
-      <div>
-        <h1 className="text-xl font-semibold">Top NFT Collections</h1>
-        <p className="mt-1 text-sm text-ink-400">Floor prices across all top marketplaces.</p>
-      </div>
+    <Page>
+      <PageHeader title="NFTs" subtitle="Top collections and their floor prices across marketplaces." />
       <NftGrid collections={collections} />
-    </main>
+    </Page>
   );
 }

@@ -4,9 +4,11 @@ import { fetchOhlc } from "@/lib/data-sources/coingecko";
 import { getMarkets, getNewListings } from "@/lib/data/cache";
 import { fetchGlobalStats, fetchFearGreed } from "@/lib/data-sources/global-stats";
 import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
-import { StatTile } from "@/components/ui/StatTile";
+import { Page, PageHeader } from "@/components/layout/Page";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { ChangePill } from "@/components/ui/ChangePill";
 import { TopMovers } from "@/components/dashboard/TopMovers";
-import { MiniPriceChart } from "@/components/charts/MiniPriceChart";
+import { HeroChart } from "@/components/charts/HeroChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { CompactPrice } from "@/components/charts/CompactPrice";
 import { TokenIcon } from "@/components/ui/TokenIcon";
@@ -16,7 +18,7 @@ export const revalidate = 120;
 
 export const metadata: Metadata = {
   description:
-    "Live crypto data from top sources, all in one terminal — prices, new listings, NFT floors, and prediction-market odds.",
+    "Live crypto data from top sources, all in one place — prices, new listings, NFT floors, and prediction-market odds.",
 };
 
 function formatUsd(n: number | null, opts: { compact?: boolean } = {}) {
@@ -29,13 +31,36 @@ function formatUsd(n: number | null, opts: { compact?: boolean } = {}) {
   return `$${n.toLocaleString()}`;
 }
 
+function Pulse({
+  label,
+  value,
+  note,
+  change,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  change?: number | null;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 bg-surface px-5 py-4">
+      <dt className="text-[13px] text-ink-400">{label}</dt>
+      <dd className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span className="text-[24px] font-semibold leading-none tracking-[-0.03em] tabular-nums">{value}</span>
+        {change !== undefined && <ChangePill pct={change} digits={2} className="!min-w-0" />}
+        {note && <span className="text-[13px] text-ink-400">{note}</span>}
+      </dd>
+    </div>
+  );
+}
+
 export default async function Home() {
   const [{ data: markets }, ohlc, globalStats, fearGreed, { data: listings }] = await Promise.all([
     getMarkets(100),
     fetchOhlc("bitcoin", 1),
     fetchGlobalStats(),
     fetchFearGreed(),
-    getNewListings(6),
+    getNewListings(8),
   ]);
 
   const btc = markets.find((m) => m.id === "bitcoin");
@@ -48,63 +73,65 @@ export default async function Home() {
   }));
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
-      <div>
-        <h1 className="text-xl font-semibold">Market Overview</h1>
-        <p className="mt-1 text-sm text-ink-400">Live crypto data from top sources, all in one terminal.</p>
-      </div>
+    <Page>
+      <PageHeader title="Markets" subtitle="Crypto, NFTs and prediction odds — live, in one place." />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label="Total Market Cap"
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[22px] bg-line lg:grid-cols-4">
+        <Pulse
+          label="Market cap"
           value={formatUsd(globalStats.totalMarketCapUsd, { compact: true })}
-          changePct={globalStats.marketCapChangePct24h}
+          change={globalStats.marketCapChangePct24h}
         />
-        <StatTile label="24H Volume" value={formatUsd(globalStats.totalVolumeUsd, { compact: true })} />
-        <StatTile
-          label="BTC Dominance"
-          value={globalStats.btcDominancePct !== null ? `${globalStats.btcDominancePct.toFixed(2)}%` : "—"}
+        <Pulse label="24h volume" value={formatUsd(globalStats.totalVolumeUsd, { compact: true })} />
+        <Pulse
+          label="BTC dominance"
+          value={globalStats.btcDominancePct !== null ? `${globalStats.btcDominancePct.toFixed(1)}%` : "—"}
         />
-        <StatTile
+        <Pulse
           label="Fear & Greed"
           value={fearGreed ? String(fearGreed.value) : "—"}
-          sub={fearGreed?.classification}
+          note={fearGreed?.classification}
         />
-      </div>
+      </dl>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.4fr_1fr]">
+      <section className="rise rise-1">
+        <div className="mb-5 flex items-center gap-2.5 px-1">
+          <TokenIcon src={btc?.image} alt="BTC" size={28} />
+          <Link href="/trade/btc-usdt" className="press flex items-baseline gap-2">
+            <span className="text-[17px] font-semibold tracking-[-0.02em]">Bitcoin</span>
+            <span className="text-[15px] text-ink-400">BTC/USDT</span>
+          </Link>
+          <Link href="/trade/btc-usdt" className="press ml-auto text-[15px] font-medium text-accent">
+            Trade view
+          </Link>
+        </div>
+        <div className="px-1">
+          <LiveTicker symbol="BTCUSDT" base="BTC" quote="USDT" seedPrice={btc?.priceUsd ?? null} />
+        </div>
+        <div className="mt-6">
+          <HeroChart pairSlug="btc-usdt" seed={seed} />
+        </div>
+      </section>
+
+      <div className="rise rise-2 grid grid-cols-1 gap-9 lg:grid-cols-2 lg:gap-8">
         <TopMovers markets={markets} />
 
-        <div className="flex flex-col rounded-xl2 border border-line bg-surface">
-          <div className="flex items-center justify-between px-4 pt-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <TokenIcon src={btc?.image} alt="BTC" size={22} />
-                <span className="text-sm font-semibold">BTC/USDT</span>
-              </div>
-              <div className="mt-1">
-                <LiveTicker symbol="BTCUSDT" base="BTC" quote="USDT" seedPrice={btc?.priceUsd ?? null} />
-              </div>
-            </div>
-          </div>
-          <MiniPriceChart pairSlug="btc-usdt" seed={seed} />
-        </div>
-
-        <div className="flex flex-col rounded-xl2 border border-line bg-surface p-4">
-          <h3 className="mb-3 text-sm font-semibold">Market Summary</h3>
-          <ul className="flex flex-col gap-2.5">
+        <section>
+          <SectionHeader title="Watchlist" href="/markets" hrefLabel="See all" />
+          <ul className="group-card" style={{ "--sep-inset": "64px" } as React.CSSProperties}>
             {LAUNCH_PAIRS.map((pair) => {
               const m = markets.find((mm) => mm.id === pair.coingeckoId);
               return (
-                <li key={pair.slug}>
-                  <Link
-                    href={`/trade/${pair.slug}`}
-                    className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 hover:bg-hover"
-                  >
-                    <TokenIcon src={m?.image} alt={pair.base} size={24} />
-                    <span className="flex-1 text-sm font-medium">
-                      {pair.base}/{pair.quote}
-                    </span>
+                <li key={pair.slug} className="list-row">
+                  <Link href={`/trade/${pair.slug}`} className="list-row flex items-center gap-3 px-4 py-3">
+                    <TokenIcon src={m?.image} alt={pair.base} size={36} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[16px] font-semibold tracking-[-0.015em]">
+                        {pair.base}
+                        <span className="font-normal text-ink-400">/{pair.quote}</span>
+                      </div>
+                      <div className="truncate text-[13px] text-ink-400">{m?.name ?? pair.base}</div>
+                    </div>
                     <CompactPrice
                       key={pair.binanceSymbol}
                       symbol={pair.binanceSymbol}
@@ -115,43 +142,34 @@ export default async function Home() {
               );
             })}
           </ul>
-          <Link href="/markets" className="mt-3 text-xs font-medium text-accent hover:underline">
-            View all markets →
-          </Link>
-        </div>
+        </section>
       </div>
 
-      <div className="rounded-xl2 border border-line bg-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Latest New Listings</h3>
-          <Link href="/new-listings" className="text-xs font-medium text-accent hover:underline">
-            View all →
-          </Link>
-        </div>
-        <div className="flex gap-3 overflow-x-auto pb-1">
+      <section className="rise rise-3">
+        <SectionHeader title="New Listings" href="/new-listings" hrefLabel="See all" />
+        <div className="no-scrollbar -mx-5 flex snap-x scroll-pl-5 gap-3 overflow-x-auto px-5 pb-1 sm:-mx-8 sm:scroll-pl-8 sm:px-8 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0">
           {listings.map((l) => (
-            <div
+            <Link
               key={l.id}
-              className="flex w-40 shrink-0 flex-col gap-2 rounded-xl2 border border-line bg-surface-2 p-3"
+              href="/new-listings"
+              className="press group-card flex w-[176px] shrink-0 snap-start flex-col gap-3 p-4 lg:w-auto"
             >
-              <TokenIcon src={l.image} alt={l.symbol} size={32} />
-              <div className="truncate text-sm font-medium">{l.name}</div>
-              <div className="text-xs tabular-nums text-ink-300">
-                {l.priceUsd !== null
-                  ? `$${l.priceUsd < 1 ? l.priceUsd.toPrecision(3) : l.priceUsd.toFixed(2)}`
-                  : "—"}
+              <TokenIcon src={l.image} alt={l.symbol} size={40} />
+              <div className="min-w-0">
+                <div className="truncate text-[16px] font-semibold tracking-[-0.015em]">{l.symbol}</div>
+                <div className="truncate text-[13px] text-ink-400">{l.name}</div>
               </div>
-              {l.change24hPct !== null && (
-                <div className={`text-xs ${l.change24hPct >= 0 ? "text-pos" : "text-neg"}`}>
-                  {l.change24hPct >= 0 ? "+" : ""}
-                  {l.change24hPct.toFixed(1)}%
-                </div>
-              )}
-            </div>
+              <div className="flex flex-col items-start gap-1.5">
+                <span className="text-[14px] font-medium tabular-nums text-ink-200">
+                  {l.priceUsd !== null ? `$${l.priceUsd < 1 ? l.priceUsd.toPrecision(3) : l.priceUsd.toFixed(2)}` : "—"}
+                </span>
+                <ChangePill pct={l.change24hPct} digits={0} />
+              </div>
+            </Link>
           ))}
-          {listings.length === 0 && <p className="text-sm text-ink-400">No data right now.</p>}
+          {listings.length === 0 && <p className="px-1 text-[15px] text-ink-400">No new listings right now.</p>}
         </div>
-      </div>
-    </div>
+      </section>
+    </Page>
   );
 }

@@ -1,20 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppConfigProvider } from "@/components/config/AppConfigProvider";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { TopBar } from "@/components/layout/TopBar";
-import { MobileTopBar, MobileBottomNav } from "@/components/layout/MobileNav";
+import { TopNav } from "@/components/layout/TopNav";
+import { MobileTabBar } from "@/components/layout/MobileNav";
 import { CONFIG_STORAGE_KEY, THEME_STORAGE_KEY } from "@/lib/config/project-config";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Inter is only the fallback: Apple devices use their own SF Pro via
+// -apple-system (see --font-sans in globals.css).
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -46,10 +43,12 @@ const noFlashScript = `
       var cfg = JSON.parse(raw);
       var brand = cfg && cfg.brand;
       var hex = /^#[0-9a-fA-F]{6}$/;
-      if (brand && hex.test(brand.primary)) {
+      // The default brand colors are the theme's own accent (globals.css),
+      // so only a non-default saved color becomes an inline override.
+      if (brand && hex.test(brand.primary) && brand.primary.toLowerCase() !== "#0a84ff") {
         document.documentElement.style.setProperty("--accent", brand.primary);
       }
-      if (brand && hex.test(brand.secondary)) {
+      if (brand && hex.test(brand.secondary) && brand.secondary.toLowerCase() !== "#5ac8fa") {
         document.documentElement.style.setProperty("--accent-2", brand.secondary);
       }
     }
@@ -59,21 +58,15 @@ const noFlashScript = `
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
       </head>
-      <body className="min-h-full bg-bg text-ink-50">
+      <body className="min-h-full bg-bg font-sans text-ink-50">
         <AppConfigProvider>
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <MobileTopBar />
-              <TopBar />
-              <main className="flex-1 pb-16 lg:pb-0">{children}</main>
-              <MobileBottomNav />
-            </div>
-          </div>
+          <TopNav />
+          <div className="pb-[calc(88px+env(safe-area-inset-bottom))] lg:pb-16">{children}</div>
+          <MobileTabBar />
         </AppConfigProvider>
       </body>
     </html>
