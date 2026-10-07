@@ -22,7 +22,7 @@ export async function fetchBinanceListings(): Promise<ExchangeListing[]> {
   try {
     const res = await fetch(URL_, {
       headers: { accept: "application/json", "user-agent": "NexusProtocol/1.0" },
-      cache: "no-store", // page-level ISR caches the result
+      next: { revalidate: 300 }, // (no-store would opt the ISR page out of static rendering)
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
