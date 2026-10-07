@@ -1,6 +1,22 @@
 // Shared shapes every data-source module normalizes into, so the poll route
 // and cache tables don't need to know each upstream API's quirks.
 
+/** Raw trading signals for a freshly listed DEX token — inputs to the risk
+ * score (lib/risk/score.ts). Only dexscreener rows carry these. */
+export type ListingSignals = {
+  buys5m: number;
+  sells5m: number;
+  buys1h: number;
+  sells1h: number;
+  buys24h: number;
+  sells24h: number;
+  volume24hUsd: number | null;
+  fdvUsd: number | null;
+  change1hPct: number | null;
+  hasSocials: boolean;
+  hasWebsite: boolean;
+};
+
 export type Listing = {
   id: string; // stable key: coingecko coin id, or a dexscreener token address
   source: "coingecko" | "dexscreener";
@@ -14,6 +30,7 @@ export type Listing = {
   liquidityUsd: number | null;
   pairCreatedAt: number | null; // epoch ms — dexscreener rows only
   link: string;
+  signals?: ListingSignals; // dexscreener rows only; absent on older cached rows
 };
 
 export type NftCollection = {

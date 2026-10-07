@@ -1,12 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ChevronDown, CheckCircle2, TriangleAlert, XCircle } from "lucide-react";
 import { TokenIcon } from "@/components/ui/TokenIcon";
 import { ChangePill } from "@/components/ui/ChangePill";
 import { Segmented } from "@/components/ui/Segmented";
 import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
 import { LiveStatusChip } from "@/components/status/LiveStatusChip";
+import { RiskBadge } from "./RiskBadge";
+import { SecurityScan } from "./SecurityScan";
 import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
+import { assessRisk, type RiskAssessment } from "@/lib/risk/score";
 import { usePolled } from "@/lib/live/usePolled";
 import type { Listing } from "@/lib/data-sources/types";
 
@@ -48,11 +52,52 @@ const CHAIN_LABEL: Record<string, string> = {
 };
 const chainName = (c: string | null) => (c ? (CHAIN_LABEL[c] ?? c) : "");
 
+const REASON_ICON = {
+  good: <CheckCircle2 className="h-[17px] w-[17px] shrink-0 text-pos" strokeWidth={2} />,
+  warn: <TriangleAlert className="h-[17px] w-[17px] shrink-0 text-warn" strokeWidth={2} />,
+  bad: <XCircle className="h-[17px] w-[17px] shrink-0 text-neg" strokeWidth={2} />,
+} as const;
+
+/** Expanded detail: the plain-language reasons behind the rating, plus the
+ * on-demand contract scan. Always carries the "not advice" caveat. */
+function RiskDetail({ listing, risk }: { listing: Listing; risk: RiskAssessment | null }) {
+  const [chain, ...rest] = listing.id.split(":");
+  const address = rest.join(":");
+
+  return (
+    <div className="flex flex-col gap-5 px-4 pb-5 pt-1 sm:pl-[68px]">
+      {risk && (
+        <div className="flex flex-col gap-2.5">
+          <h3 className="text-[13px] font-semibold text-ink-400">Why this rating</h3>
+          <ul className="flex flex-col gap-2">
+            {risk.reasons.map((r) => (
+              <li key={r.text} className="flex items-start gap-2.5 text-[13.5px] leading-snug text-ink-200">
+                {REASON_ICON[r.kind]}
+                {r.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="flex flex-col gap-2.5">
+        <h3 className="text-[13px] font-semibold text-ink-400">Contract check</h3>
+        <SecurityScan chain={chain} address={address} />
+      </div>
+      <p className="text-[12px] leading-snug text-ink-400">
+        The rating is an automated heuristic from trading data. It flags common red flags but can&apos;t guarantee
+        a token is safe or a scam. Not financial advice.
+      </p>
+      <ExternalLinkBadge href={listing.link} label="Open on DexScreener" />
+    </div>
+  );
+}
+
 /** `listings` is the server's cached snapshot (first paint + SEO); the
  * browser then refreshes straight from DexScreener every 20s. */
 export function ListingsTable({ listings: initial }: { listings: Listing[] }) {
   const { data: listings, status } = usePolled(fetchFreshListings, initial, REFRESH_MS);
   const [chain, setChain] = useState<string>("all");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   // Only the busiest few chains get a tab; the long tail stays under "All".
   const chains = useMemo(() => {
@@ -81,29 +126,49 @@ export function ListingsTable({ listings: initial }: { listings: Listing[] }) {
         {filtered.map((l) => {
           const age = formatAge(l.pairCreatedAt);
           const liquidity = formatCompactUsd(l.liquidityUsd);
+          const risk = assessRisk(l);
+          const open = openId === l.id;
           return (
-            <li key={l.id} className="list-row flex items-center gap-3.5 px-4 py-3.5">
-              <TokenIcon src={l.image} alt={l.symbol} size={40} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[16px] font-semibold tracking-[-0.015em]">{l.symbol}</div>
-                <div className="truncate text-[13px] text-ink-400" suppressHydrationWarning>
-                  {[l.name, chainName(l.chain), age].filter(Boolean).join(" · ")}
+            <li key={l.id} className="list-row">
+              <button
+                onClick={() => setOpenId(open ? null : l.id)}
+                aria-expanded={open}
+                className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-hover"
+              >
+                <TokenIcon src={l.image} alt={l.symbol} size={40} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[16px] font-semibold tracking-[-0.015em]">{l.symbol}</span>
+                    {risk && <RiskBadge level={risk.level} />}
+                  </div>
+                  <div className="truncate text-[13px] text-ink-400" suppressHydrationWarning>
+                    {[l.name, chainName(l.chain), age].filter(Boolean).join(" · ")}
+                  </div>
                 </div>
-              </div>
-              <div className="hidden w-[88px] text-right sm:block">
-                {liquidity && (
-                  <>
-                    <div className="text-[15px] font-medium tabular-nums text-ink-200">{liquidity}</div>
-                    <div className="text-[12px] text-ink-500">liquidity</div>
-                  </>
-                )}
-              </div>
-              <div className="flex min-w-[112px] flex-col items-end gap-1">
-                <span className="text-[16px] font-semibold tracking-[-0.02em] tabular-nums">{formatPrice(l.priceUsd)}</span>
-                <ChangePill pct={l.change24hPct} digits={l.change24hPct !== null && Math.abs(l.change24hPct) >= 100 ? 0 : 1} />
-              </div>
-              <div className="hidden w-[92px] justify-end md:flex">
-                <ExternalLinkBadge href={l.link} label="DexScreener" />
+                <div className="hidden w-[88px] text-right sm:block">
+                  {liquidity && (
+                    <>
+                      <div className="text-[15px] font-medium tabular-nums text-ink-200">{liquidity}</div>
+                      <div className="text-[12px] text-ink-500">liquidity</div>
+                    </>
+                  )}
+                </div>
+                <div className="flex min-w-[104px] flex-col items-end gap-1">
+                  <span className="text-[16px] font-semibold tracking-[-0.02em] tabular-nums">{formatPrice(l.priceUsd)}</span>
+                  <ChangePill pct={l.change24hPct} digits={l.change24hPct !== null && Math.abs(l.change24hPct) >= 100 ? 0 : 1} />
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-ink-500 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+                  strokeWidth={2.2}
+                  aria-hidden
+                />
+              </button>
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+                  open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                }`}
+              >
+                <div className="overflow-hidden">{open && <RiskDetail listing={l} risk={risk} />}</div>
               </div>
             </li>
           );
