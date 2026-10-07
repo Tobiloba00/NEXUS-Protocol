@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 
 const STATIC_PAGES = [
-  { label: "Overview", href: "/" },
+  { label: "Home", href: "/" },
   { label: "Markets", href: "/markets" },
   { label: "New Listings", href: "/new-listings" },
   { label: "NFTs", href: "/nft" },
@@ -19,14 +19,14 @@ const SEARCHABLE = [
   ...LAUNCH_PAIRS.map((p) => ({ label: `${p.base}/${p.quote}`, href: `/trade/${p.slug}` })),
 ];
 
-/** Real, if simple: filters a fixed local list (every page + trading pair)
- * client-side and navigates on select — not a decorative input that does
- * nothing, which was the pattern being explicitly moved away from. */
+/** Filters every page + trading pair client-side and navigates on select.
+ * "/" or ⌘/Ctrl+K focuses it from anywhere. */
 export function SiteSearch() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -38,20 +38,40 @@ export function SiteSearch() {
     function onClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      const typing = /input|textarea|select/i.test((e.target as HTMLElement)?.tagName ?? "");
+      if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !typing)) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+      if (e.key === "Escape") {
+        setOpen(false);
+        inputRef.current?.blur();
+      }
+    }
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   function go(href: string) {
     router.push(href);
     setQuery("");
     setOpen(false);
+    inputRef.current?.blur();
   }
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-xs">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
+    <div ref={containerRef} className="relative w-full">
+      <Search
+        className="pointer-events-none absolute left-3 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-ink-400"
+        strokeWidth={2}
+      />
       <input
+        ref={inputRef}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -61,14 +81,18 @@ export function SiteSearch() {
         onKeyDown={(e) => {
           if (e.key === "Enter" && results[0]) go(results[0].href);
         }}
-        placeholder="Search tokens, pairs, pages…"
-        className="w-full rounded-lg border border-line bg-surface-2 py-2 pl-9 pr-3 text-sm placeholder:text-ink-500 focus:outline-none focus:ring-1 focus:ring-accent"
+        placeholder="Search"
+        aria-label="Search"
+        className="h-9 w-full rounded-[11px] bg-[var(--seg-track)] pl-[34px] pr-3 text-[15px] tracking-[-0.01em] outline-none transition-shadow placeholder:text-ink-400 focus:ring-2 focus:ring-accent/40"
       />
       {open && results.length > 0 && (
-        <ul className="absolute z-20 mt-1.5 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-[var(--shadow-lg)]">
+        <ul className="absolute right-0 z-50 mt-2 w-full min-w-[220px] overflow-hidden rounded-2xl bg-surface p-1.5 shadow-[var(--shadow-lg)]">
           {results.map((r) => (
             <li key={r.href}>
-              <button onClick={() => go(r.href)} className="block w-full px-3 py-2 text-left text-sm hover:bg-hover">
+              <button
+                onClick={() => go(r.href)}
+                className="block w-full rounded-xl px-3 py-2 text-left text-[15px] transition-colors hover:bg-hover"
+              >
                 {r.label}
               </button>
             </li>

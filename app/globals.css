@@ -1,109 +1,139 @@
 @import "tailwindcss";
 
 /*
- * Theme system ported from the legacy single-file app (legacy/index.html:116-264).
- * Same idea: CSS custom properties hold every color, Tailwind utility classes
- * resolve through them (via @theme inline below), and rebrand/theme changes
- * are just var updates — no rebuild needed. Dark is the default palette;
- * light overrides via both prefers-color-scheme AND [data-theme] so a
- * manual toggle can win over system preference.
+ * Design system: iOS-style "grouped" language.
+ *  - Canvas + flat surface groups instead of bordered cards. Depth comes from
+ *    the contrast between canvas and group, not from borders or glows.
+ *  - Hairline dividers inset from the leading icon (see .list-row).
+ *  - One accent color, used sparingly (links, selection, primary action).
+ *  - Translucent "glass" bars for navigation (.glass).
+ *  - Colors are iOS system colors; dark mode uses true black + #1c1c1e groups.
+ *
+ * Every color is a CSS variable and Tailwind utilities resolve through them
+ * (@theme inline below). Dark is the server-rendered default; light applies
+ * via prefers-color-scheme AND [data-theme] so a manual toggle wins.
  */
 
 :root {
-  --bg: #0a0a0f;
-  --surface: #12121a;
-  --surface-2: #181822;
-  --raised: #1c1c28;
-  --hover: #22222f;
-  --line: #26262f;
-  --line-2: #2f2f3a;
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --raised: #2c2c2e;
+  --hover: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.18);
 
-  --ink-50: #f5f5f7;
-  --ink-100: #e4e4e9;
-  --ink-200: #c7c7d1;
-  --ink-300: #a3a3b0;
-  --ink-400: #888897;
-  --ink-500: #6b6b78;
-  --ink-600: #4d4d58;
+  --ink-50: #ffffff;
+  --ink-100: #f2f2f7;
+  --ink-200: #d1d1d6;
+  --ink-300: #aeaeb2;
+  --ink-400: #8e8e93;
+  --ink-500: #636366;
+  --ink-600: #48484a;
 
-  --accent: #8b5cf6;
-  --accent-hi: #a78bfa;
-  --accent-2: #22d3ee;
-  --accent-3: #f472b6;
+  --accent: #0a84ff;
+  --accent-hi: #409cff;
+  --accent-2: #5ac8fa;
+  --accent-3: #bf5af2;
+  --accent-soft: rgba(10, 132, 255, 0.16);
 
-  --pos: #22c55e;
-  --neg: #ef4444;
-  --warn: #f59e0b;
-  --pos-soft: rgba(34, 197, 94, 0.14);
-  --neg-soft: rgba(239, 68, 68, 0.14);
+  --pos: #30d158;
+  --neg: #ff453a;
+  --warn: #ffd60a;
+  --pos-soft: rgba(48, 209, 88, 0.16);
+  --neg-soft: rgba(255, 69, 58, 0.16);
 
-  --backdrop: rgba(5, 5, 10, 0.72);
-  --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
+  --glass: rgba(0, 0, 0, 0.62);
+  --backdrop: rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
   --grid-line: rgba(255, 255, 255, 0.06);
 
-  --primary-soft: rgba(139, 92, 246, 0.12);
-  --primary-grad: linear-gradient(135deg, var(--accent), var(--accent-2));
-  --primary-grad-hi: linear-gradient(135deg, var(--accent-hi), var(--accent-2));
+  --seg-track: rgba(118, 118, 128, 0.24);
+  --seg-thumb: #636366;
+  --seg-thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #fafafa;
+    --bg: #f2f2f7;
     --surface: #ffffff;
-    --surface-2: #f4f4f6;
+    --surface-2: #ededf2;
     --raised: #ffffff;
-    --hover: #f0f0f3;
-    --line: #e4e4e9;
-    --line-2: #d4d4dc;
+    --hover: rgba(60, 60, 67, 0.06);
+    --line: rgba(60, 60, 67, 0.14);
+    --line-2: rgba(60, 60, 67, 0.24);
 
-    --ink-50: #16161d;
-    --ink-100: #262631;
-    --ink-200: #45454f;
-    --ink-300: #63636e;
-    --ink-400: #85858f;
-    --ink-500: #9d9da6;
-    --ink-600: #c1c1c8;
+    --ink-50: #0b0b0f;
+    --ink-100: #1c1c1e;
+    --ink-200: #3a3a3c;
+    --ink-300: #636366;
+    --ink-400: #8a8a8e;
+    --ink-500: #aeaeb2;
+    --ink-600: #c7c7cc;
 
-    --backdrop: rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.12);
+    --accent: #007aff;
+    --accent-hi: #3395ff;
+    --accent-soft: rgba(0, 122, 255, 0.12);
+
+    --pos: #1f9d4d;
+    --neg: #e0342b;
+    --warn: #b88600;
+    --pos-soft: rgba(52, 199, 89, 0.16);
+    --neg-soft: rgba(255, 59, 48, 0.12);
+
+    --glass: rgba(242, 242, 247, 0.72);
+    --backdrop: rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 24px 48px -12px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06);
     --grid-line: rgba(0, 0, 0, 0.06);
-    --primary-soft: rgba(139, 92, 246, 0.08);
-    --pos-soft: rgba(22, 163, 74, 0.1);
-    --neg-soft: rgba(220, 38, 38, 0.1);
+
+    --seg-track: rgba(118, 118, 128, 0.12);
+    --seg-thumb: #ffffff;
+    --seg-thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04);
   }
 }
 
 :root[data-theme="light"] {
-  --bg: #fafafa;
+  --bg: #f2f2f7;
   --surface: #ffffff;
-  --surface-2: #f4f4f6;
+  --surface-2: #ededf2;
   --raised: #ffffff;
-  --hover: #f0f0f3;
-  --line: #e4e4e9;
-  --line-2: #d4d4dc;
+  --hover: rgba(60, 60, 67, 0.06);
+  --line: rgba(60, 60, 67, 0.14);
+  --line-2: rgba(60, 60, 67, 0.24);
 
-  --ink-50: #16161d;
-  --ink-100: #262631;
-  --ink-200: #45454f;
-  --ink-300: #63636e;
-  --ink-400: #85858f;
-  --ink-500: #9d9da6;
-  --ink-600: #c1c1c8;
+  --ink-50: #0b0b0f;
+  --ink-100: #1c1c1e;
+  --ink-200: #3a3a3c;
+  --ink-300: #636366;
+  --ink-400: #8a8a8e;
+  --ink-500: #aeaeb2;
+  --ink-600: #c7c7cc;
 
-  --backdrop: rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 20px 40px -12px rgba(0, 0, 0, 0.12);
+  --accent: #007aff;
+  --accent-hi: #3395ff;
+  --accent-soft: rgba(0, 122, 255, 0.12);
+
+  --pos: #1f9d4d;
+  --neg: #e0342b;
+  --warn: #b88600;
+  --pos-soft: rgba(52, 199, 89, 0.16);
+  --neg-soft: rgba(255, 59, 48, 0.12);
+
+  --glass: rgba(242, 242, 247, 0.72);
+  --backdrop: rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 24px 48px -12px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06);
   --grid-line: rgba(0, 0, 0, 0.06);
-  --primary-soft: rgba(139, 92, 246, 0.08);
-  --pos-soft: rgba(22, 163, 74, 0.1);
-  --neg-soft: rgba(220, 38, 38, 0.1);
+
+  --seg-track: rgba(118, 118, 128, 0.12);
+  --seg-thumb: #ffffff;
+  --seg-thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
-/* Tailwind v4 CSS-first theme: map utility tokens (bg-surface, text-ink-400, ...)
-   straight onto the CSS vars above, so admin-panel rebrands propagate without
-   a rebuild — same trick the legacy app used with the Tailwind CDN's inline config. */
+/* Tailwind v4 CSS-first theme: utility tokens (bg-surface, text-ink-400, ...)
+   resolve through the CSS vars above, so theme/brand changes need no rebuild. */
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -125,7 +155,7 @@
   --color-accent-hi: var(--accent-hi);
   --color-accent-2: var(--accent-2);
   --color-accent-3: var(--accent-3);
-  --color-accent-soft: var(--primary-soft);
+  --color-accent-soft: var(--accent-soft);
 
   --color-pos: var(--pos);
   --color-neg: var(--neg);
@@ -133,10 +163,11 @@
   --color-pos-soft: var(--pos-soft);
   --color-neg-soft: var(--neg-soft);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* SF Pro on Apple devices (via -apple-system), Inter everywhere else. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-inter), system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace;
 
-  --radius-xl2: 16px;
+  --radius-xl2: 20px;
 }
 
 html {
@@ -152,8 +183,148 @@ html {
 body {
   background: var(--bg);
   color: var(--ink-50);
+  font-feature-settings: "cv11", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: var(--primary-soft);
+  background: var(--accent-soft);
+}
+
+/* ---------- Type scale (iOS-like) ---------- */
+.t-large-title {
+  font-size: clamp(30px, 4.2vw, 40px);
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+.t-title {
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.022em;
+}
+.t-headline {
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+}
+.t-body {
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: -0.008em;
+}
+.t-caption {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink-400);
+}
+.t-section {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink-400);
+}
+
+/* ---------- Surfaces ---------- */
+/* Inset grouped container: flat surface on the canvas, no border, no shadow. */
+.group-card {
+  background: var(--surface);
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+/* Row with a hairline divider inset from the leading icon. Set --sep-inset
+   on the row (or its group) to match the icon column width. */
+.list-row {
+  position: relative;
+}
+.list-row + .list-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--sep-inset, 64px);
+  right: 0;
+  height: 1px;
+  background: var(--line);
+  transform: scaleY(0.5);
+  transform-origin: top;
+}
+a.list-row,
+button.list-row {
+  transition: background-color 0.15s ease;
+}
+a.list-row:hover,
+button.list-row:hover {
+  background: var(--hover);
+}
+
+/* Translucent navigation bars. */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
+/* ---------- Motion ---------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.rise-1 {
+  animation-delay: 0.05s;
+}
+.rise-2 {
+  animation-delay: 0.1s;
+}
+.rise-3 {
+  animation-delay: 0.15s;
+}
+.press {
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s ease;
+}
+.press:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pos) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+.live-dot {
+  animation: live-pulse 1.8s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .live-dot {
+    animation: none;
+  }
+  .press {
+    transition: none;
+  }
+}
+
+/* Horizontal carousels hide their scrollbar like iOS does. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

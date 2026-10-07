@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getNewListings } from "@/lib/data/cache";
+import { Page, PageHeader } from "@/components/layout/Page";
 import { ListingsTable } from "@/components/listings/ListingsTable";
 
 export const revalidate = 120;
@@ -13,12 +14,9 @@ export default async function NewListingsPage() {
   const { data: listings } = await getNewListings(30);
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
-      <div>
-        <h1 className="text-xl font-semibold">New Token Listings</h1>
-        <p className="mt-1 text-sm text-ink-400">Freshly listed tokens across all chains.</p>
-      </div>
+    <Page>
+      <PageHeader title="New Listings" subtitle="Tokens that just appeared on a DEX, newest first." />
       <ListingsTable listings={listings} />
-    </main>
+    </Page>
   );
 }

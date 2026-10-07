@@ -46,10 +46,23 @@ export function useLiveMovers(markets: Listing[], count = 5) {
       if (m.priceUsd && (t.price > m.priceUsd * 2 || t.price < m.priceUsd / 2)) return m;
       return { ...m, priceUsd: t.price, change24hPct: t.changePct24h };
     });
-    const withChange = merged.filter((m) => m.change24hPct !== null);
+    // Pegged stablecoins aren't "movers": a price pinned near $1 that barely
+    // moves is filtered out (a depegging coin has a big change, so it stays).
+    const isStable = (m: Listing) =>
+      m.priceUsd !== null && m.priceUsd > 0.95 && m.priceUsd < 1.05 && Math.abs(m.change24hPct ?? 0) < 1;
+    const withChange = merged.filter((m) => m.change24hPct !== null && !isStable(m));
+    // A "gainer" has to have actually gained (and a "loser" lost) — on a red
+    // day the list is shorter rather than padded with +0.03% rows.
+    const MIN_MOVE_PCT = 0.5;
     return {
-      gainers: [...withChange].sort((a, b) => (b.change24hPct ?? 0) - (a.change24hPct ?? 0)).slice(0, count),
-      losers: [...withChange].sort((a, b) => (a.change24hPct ?? 0) - (b.change24hPct ?? 0)).slice(0, count),
+      gainers: withChange
+        .filter((m) => (m.change24hPct ?? 0) >= MIN_MOVE_PCT)
+        .sort((a, b) => (b.change24hPct ?? 0) - (a.change24hPct ?? 0))
+        .slice(0, count),
+      losers: withChange
+        .filter((m) => (m.change24hPct ?? 0) <= -MIN_MOVE_PCT)
+        .sort((a, b) => (a.change24hPct ?? 0) - (b.change24hPct ?? 0))
+        .slice(0, count),
     };
   }, [markets, live, count]);
 

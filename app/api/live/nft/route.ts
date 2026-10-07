@@ -6,9 +6,10 @@ import { getNftCollections } from "@/lib/data/cache";
  * Live NFT floors for the browser. Magic Eden doesn't send CORS headers, so
  * visitors can't call it directly the way they call DexScreener/Polymarket —
  * this route is the bridge. The Cache-Control header lets Vercel's CDN
- * answer every visitor from one shared copy for 20s (then serve-stale while
- * refreshing), so upstream sees ~3 calls/minute no matter how many people
- * are watching (Magic Eden allows 120/min per IP).
+ * answer every visitor from one shared copy for 90s (then serve-stale while
+ * refreshing). Each refresh costs ~41 upstream calls (the list + one floor
+ * lookup per collection), so the cache window is 90s: ~27 calls/minute no
+ * matter how many people are watching (Magic Eden allows 120/min per IP).
  *
  * If the upstream returns nothing (down / rate limited), fall back to the
  * last good Supabase snapshot rather than an empty list.
@@ -29,6 +30,6 @@ export async function GET() {
 
   return NextResponse.json(
     { ok: true, from, collections },
-    { headers: { "Cache-Control": "public, s-maxage=20, stale-while-revalidate=60" } }
+    { headers: { "Cache-Control": "public, s-maxage=90, stale-while-revalidate=120" } }
   );
 }
