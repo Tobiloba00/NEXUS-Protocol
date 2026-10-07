@@ -7,7 +7,10 @@
  * predictions) rather than each one growing its own chip.
  */
 
-export type LiveStatus = "live" | "stale" | "mock";
+// "delayed" = the live feed never connected (blocked network, source down),
+// so the page is showing the server's last cached snapshot. Said plainly
+// instead of leaving a "Reconnecting…" chip spinning forever.
+export type LiveStatus = "live" | "stale" | "mock" | "delayed";
 
 export function LiveStatusChip({ status, source }: { status: LiveStatus; source?: string }) {
   const label =
@@ -15,10 +18,18 @@ export function LiveStatusChip({ status, source }: { status: LiveStatus; source?
       ? `Live${source ? ` · ${source}` : ""}`
       : status === "stale"
         ? "Reconnecting…"
-        : "Sample data";
+        : status === "delayed"
+          ? "Delayed · cached snapshot"
+          : "Sample data";
 
   const dotClass =
-    status === "live" ? "bg-pos" : status === "stale" ? "bg-neg animate-pulse" : "bg-ink-500";
+    status === "live"
+      ? "bg-pos"
+      : status === "stale"
+        ? "bg-neg animate-pulse"
+        : status === "delayed"
+          ? "bg-warn"
+          : "bg-ink-500";
 
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-xs text-ink-300">

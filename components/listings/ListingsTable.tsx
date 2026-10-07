@@ -3,7 +3,18 @@
 import { useMemo, useState } from "react";
 import { TokenIcon } from "@/components/ui/TokenIcon";
 import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
+import { LiveStatusChip } from "@/components/status/LiveStatusChip";
+import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
+import { usePolled } from "@/lib/live/usePolled";
 import type { Listing } from "@/lib/data-sources/types";
+
+const REFRESH_MS = 20000;
+
+async function fetchFreshListings() {
+  const rows = await fetchNewTokenProfiles(30);
+  if (!rows.length) throw new Error("no listings returned"); // keep previous rows on screen
+  return rows;
+}
 
 function formatAge(pairCreatedAt: number | null) {
   if (!pairCreatedAt) return "—";
@@ -29,7 +40,10 @@ const CHAIN_LABEL: Record<string, string> = {
   arbitrum: "Arbitrum",
 };
 
-export function ListingsTable({ listings }: { listings: Listing[] }) {
+/** `listings` is the server's cached snapshot (first paint + SEO); the
+ * browser then refreshes straight from DexScreener every 20s. */
+export function ListingsTable({ listings: initial }: { listings: Listing[] }) {
+  const { data: listings, status } = usePolled(fetchFreshListings, initial, REFRESH_MS);
   const [chain, setChain] = useState<string>("all");
 
   const chains = useMemo(() => {
@@ -41,6 +55,7 @@ export function ListingsTable({ listings }: { listings: Listing[] }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <LiveStatusChip status={status} source="DexScreener · every 20s" />
       <div className="flex gap-1.5 overflow-x-auto rounded-lg bg-surface-2 p-1">
         <button
           onClick={() => setChain("all")}

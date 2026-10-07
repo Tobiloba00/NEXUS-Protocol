@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchActiveMarkets } from "@/lib/data-sources/polymarket";
+import { getPredictionMarkets } from "@/lib/data/cache";
 import { PredictionsList } from "@/components/predictions/PredictionsList";
 
 export const revalidate = 300;
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PredictionsPage() {
-  const markets = await fetchActiveMarkets(40);
+  const { data: markets } = await getPredictionMarkets(40);
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">

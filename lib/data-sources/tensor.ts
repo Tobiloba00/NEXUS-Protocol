@@ -59,6 +59,7 @@ export async function fetchTensorCollections(_limit = 20): Promise<NftCollection
       currency: "SOL",
       volume24h: null,
       link: `https://www.tensor.trade/trade/${r.slug}`,
+      slug: null, // not wired to a /nft/[slug] detail page — this source is disabled anyway (see file header)
     }));
   } catch (err) {
     console.warn("[tensor] graphql fetch failed", err);

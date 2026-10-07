@@ -53,7 +53,9 @@ type Listener = {
   trade?: (t: BinanceTrade) => void;
 };
 
-export type BinanceStream = "ticker" | "kline_1m" | "depth20@100ms" | "trade";
+// "miniTicker" is the lightweight 1s price + 24h-open stream, used to keep
+// whole lists (top movers) live without the heavier full @ticker payload.
+export type BinanceStream = "ticker" | "miniTicker" | "kline_1m" | "depth20@100ms" | "trade";
 
 const WS_BASE = "wss://stream.binance.com:9443/stream";
 const RECONNECT_BASE_DELAY_MS = 1000;
@@ -126,6 +128,16 @@ class BinanceWsManager {
             changePct24h: Number(data.P),
           };
           listeners.forEach((l) => l.ticker?.(ticker));
+        } else if (streamKey.endsWith("@miniTicker")) {
+          // miniTicker has no precomputed % — derive it from the 24h-ago open (`o`).
+          const close = Number(data.c);
+          const open = Number(data.o);
+          const ticker: BinanceTicker = {
+            symbol: data.s,
+            price: close,
+            changePct24h: open > 0 ? ((close - open) / open) * 100 : 0,
+          };
+          listeners.forEach((l) => l.ticker?.(ticker));
         } else if (streamKey.includes("@kline")) {
           const k = data.k;
           const kline: BinanceKline = {
@@ -191,7 +203,23 @@ class BinanceWsManager {
    * whenever the subscription set changes. */
   subscribe(symbol: string, streams: BinanceStream[], listener: Listener): () => void {
     const lowerSymbol = symbol.toLowerCase();
-    const keys = streams.map((s) => `${lowerSymbol}@${s}`);
+    return this.subscribeKeys(
+      streams.map((s) => `${lowerSymbol}@${s}`),
+      listener
+    );
+  }
+
+  /** Subscribe to one stream type across many symbols with a single
+   * reconnect (not one per symbol). Binance silently ignores stream names
+   * for symbols it doesn't list, so passing a best-guess symbol list is safe. */
+  subscribeSymbols(symbols: string[], stream: BinanceStream, listener: Listener): () => void {
+    return this.subscribeKeys(
+      symbols.map((s) => `${s.toLowerCase()}@${stream}`),
+      listener
+    );
+  }
+
+  private subscribeKeys(keys: string[], listener: Listener): () => void {
     let needsReconnect = false;
 
     for (const key of keys) {

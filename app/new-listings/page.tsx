@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
+import { getNewListings } from "@/lib/data/cache";
 import { ListingsTable } from "@/components/listings/ListingsTable";
 
 export const revalidate = 120;
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NewListingsPage() {
-  const listings = await fetchNewTokenProfiles(30);
+  const { data: listings } = await getNewListings(30);
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">

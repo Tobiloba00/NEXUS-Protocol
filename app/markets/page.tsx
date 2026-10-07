@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
-import { fetchTopMarkets } from "@/lib/data-sources/coingecko";
+import { getMarkets } from "@/lib/data/cache";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { TokenIcon } from "@/components/ui/TokenIcon";
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function MarketsPage() {
-  const markets = await fetchTopMarkets(100);
+  const { data: markets } = await getMarkets(100);
   const iconByCoinId = new Map(markets.map((m) => [m.id, m.image]));
 
   return (

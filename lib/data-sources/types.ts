@@ -18,7 +18,7 @@ export type Listing = {
 
 export type NftCollection = {
   id: string; // lowercased name — dedup key, ported from legacy normalizeNFT (index.html:1332-1382)
-  source: "magiceden" | "reservoir" | "tensor";
+  source: "magiceden" | "tensor";
   chain: string;
   name: string;
   image: string | null;
@@ -26,6 +26,36 @@ export type NftCollection = {
   currency: string;
   volume24h: number | null;
   link: string;
+  // Source's own collection identifier (Magic Eden's "symbol", e.g.
+  // "degods") — needed to call per-collection listings/activity endpoints
+  // for the /nft/[slug] detail page. Null for sources that don't expose
+  // one (or aren't wired up to a detail page yet).
+  slug: string | null;
+};
+
+/** One individually-listed NFT within a collection — /nft/[slug]'s grid,
+ * not the collection-level card on /nft. Only Magic Eden is wired up to
+ * this today. */
+export type NftListing = {
+  mintAddress: string;
+  name: string;
+  image: string | null;
+  price: number | null; // in the collection's native currency (SOL for Magic Eden)
+  currency: string;
+  owner: string | null;
+  attributes: { trait: string; value: string }[];
+  link: string;
+};
+
+/** A sale/bid event from a collection's activity feed — polled, not
+ * pushed, so it's labeled "recent activity" rather than claimed as
+ * tick-level real-time (see the honesty note in nft-aggregate.ts). */
+export type NftActivity = {
+  signature: string;
+  type: string; // e.g. "buyNow", "bid", "list" — passed through from the source, not normalized further
+  price: number | null; // native currency (SOL) — not converted to USD, matching floor-price display elsewhere
+  currency: string;
+  blockTime: number | null; // epoch seconds
 };
 
 export type PredictionMarket = {

@@ -15,7 +15,7 @@ replaced: real SEO needs server-rendered HTML).
 - **Supabase** (free Postgres) — cached upstream data + Telegram alert state
 - **GitHub Actions** — the scheduled "clock" that refreshes caches and evaluates alerts (Vercel Hobby cron is capped at once/day, too slow for this)
 - **Binance / Bybit public WebSockets** — live prices, connected to directly from the browser
-- **CoinGecko, DexScreener, Magic Eden, Reservoir, Tensor, Polymarket Gamma** — free/keyless REST APIs, polled server-side and cached (never hit per-visitor)
+- **CoinGecko, DexScreener, Magic Eden, Tensor, Polymarket Gamma** — free/keyless REST APIs, polled server-side and cached (never hit per-visitor)
 - **Telegram Bot API** — free alert delivery
 
 ## Local dev

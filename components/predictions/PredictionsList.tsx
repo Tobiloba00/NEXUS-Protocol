@@ -3,7 +3,18 @@
 import { useMemo, useState } from "react";
 import { TokenIcon } from "@/components/ui/TokenIcon";
 import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
+import { LiveStatusChip } from "@/components/status/LiveStatusChip";
+import { fetchActiveMarkets } from "@/lib/data-sources/polymarket";
+import { usePolled } from "@/lib/live/usePolled";
 import type { PredictionMarket } from "@/lib/data-sources/types";
+
+const REFRESH_MS = 15000;
+
+async function fetchFreshMarkets() {
+  const rows = await fetchActiveMarkets(40);
+  if (!rows.length) throw new Error("no markets returned"); // keep previous odds on screen
+  return rows;
+}
 
 function formatVolume(n: number | null) {
   if (n === null) return "—";
@@ -17,7 +28,9 @@ function formatVolume(n: number | null) {
 // real behind them, these two tabs are both genuinely derived from data
 // already fetched: sorted by volume (Trending) or by end date, soonest
 // first (Closing Soon) as a proxy for "New" that's actually meaningful.
-export function PredictionsList({ markets }: { markets: PredictionMarket[] }) {
+export function PredictionsList({ markets: initial }: { markets: PredictionMarket[] }) {
+  // Server snapshot for first paint/SEO; browser then refreshes odds straight from Polymarket every 15s.
+  const { data: markets, status } = usePolled(fetchFreshMarkets, initial, REFRESH_MS);
   const [tab, setTab] = useState<"trending" | "closing">("trending");
 
   const sorted = useMemo(() => {
@@ -29,6 +42,7 @@ export function PredictionsList({ markets }: { markets: PredictionMarket[] }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <LiveStatusChip status={status} source="Polymarket · every 15s" />
       <div className="flex gap-1.5 rounded-lg bg-surface-2 p-1" style={{ width: "fit-content" }}>
         <button
           onClick={() => setTab("trending")}

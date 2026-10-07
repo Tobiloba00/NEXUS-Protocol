@@ -1,6 +1,5 @@
 import type { NftCollection } from "./types";
 import { fetchMagicEdenCollections } from "./magiceden";
-import { fetchReservoirCollections } from "./reservoir";
 import { fetchTensorCollections } from "./tensor";
 
 /**
@@ -9,22 +8,22 @@ import { fetchTensorCollections } from "./tensor";
  * Promise.allSettled here is a second layer of safety, not the only one —
  * matches the legacy aggregator's belt-and-suspenders resilience.
  *
- * Reservoir/Tensor return [] unless their API key env vars are set (see
- * their modules) — Magic Eden alone is what actually populates the NFT
- * module for v1, by design, not by accident.
+ * Tensor returns [] unless TENSOR_API_KEY is set — Magic Eden (Solana only)
+ * is what actually populates the NFT module today. Reservoir was removed:
+ * it shut down its NFT API on 2025-10-15. Ethereum/EVM coverage is the next
+ * source to add here (one adapter file returning NftCollection[]).
  */
 export async function fetchAllNftCollections(limit = 60): Promise<NftCollection[]> {
   const results = await Promise.allSettled([
     fetchMagicEdenCollections(limit),
-    fetchReservoirCollections(limit),
     fetchTensorCollections(limit),
   ]);
 
   const rows = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 
   // Dedup by lowercased name, first-seen wins — same rule as legacy
-  // index.html:1420-1427. Source order above (Magic Eden, Reservoir,
-  // Tensor) is therefore also the tie-break priority.
+  // index.html:1420-1427. Source order above (Magic Eden, Tensor) is
+  // therefore also the tie-break priority.
   const seen = new Set<string>();
   const deduped: NftCollection[] = [];
   for (const row of rows) {

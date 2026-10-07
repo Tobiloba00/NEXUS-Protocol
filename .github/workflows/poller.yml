@@ -1,15 +1,25 @@
 name: Poller
 
-# Vercel Hobby's built-in cron is capped at once/day (too slow for
-# near-real-time listing/NFT/alert refresh), so GitHub Actions is the
-# "clock" instead. This workflow does no work itself — it just calls the
-# app's own secret-gated poll route, which does the actual fetch/cache/
-# alert-evaluation logic server-side. Requires two repo secrets:
+# Vercel Hobby's built-in cron is capped at once/day, so a scheduler calls
+# the app's own secret-gated poll route, which does the actual fetch/cache/
+# alert-evaluation work server-side. Requires two repo secrets:
 #   SITE_URL     e.g. https://nexus-protocol.vercel.app
 #   POLL_SECRET  same value as the Vercel env var of the same name
+#
+# Sources are split into groups with different cadences so each stays inside
+# its free-tier budget (CoinGecko Demo = 10k calls/month, so "markets" runs
+# every 15 min, not every 5).
+#
+# CAVEATS — GitHub scheduled runs are best-effort: they can start 5-30 min
+# late or be dropped under load, and GitHub silently disables scheduled
+# workflows on a public repo after 60 days with no commits. Treat this as a
+# backup clock; the primary should be a Cloudflare Workers Cron Trigger (free,
+# 1-minute granularity) that POSTs the same URL. The route is idempotent, so
+# running both is safe.
 on:
   schedule:
     - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -18,10 +28,16 @@ jobs:
     steps:
       - name: Trigger poll route
         run: |
-          curl --fail --silent --show-error \
-            -X POST "${SITE_URL}/api/internal/poll" \
+          case "$SCHEDULE" in
+            "*/15 * * * *") GROUPS_PARAM="markets,nft" ;;
+            "*/5 * * * *")  GROUPS_PARAM="listings,predictions" ;;
+            *)              GROUPS_PARAM="markets,listings,nft,predictions" ;;
+          esac
+          curl --fail --silent --show-error --max-time 55 \
+            -X POST "${SITE_URL}/api/internal/poll?groups=${GROUPS_PARAM}" \
             -H "Authorization: Bearer ${POLL_SECRET}" \
             -H "Content-Type: application/json"
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
           POLL_SECRET: ${{ secrets.POLL_SECRET }}
+          SCHEDULE: ${{ github.event.schedule }}

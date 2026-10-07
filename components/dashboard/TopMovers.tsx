@@ -2,10 +2,46 @@
 
 import { useState } from "react";
 import { TokenIcon } from "@/components/ui/TokenIcon";
+import { LiveStatusChip } from "@/components/status/LiveStatusChip";
+import { usePriceFlash } from "@/lib/exchanges/usePriceFlash";
+import { useLiveMovers } from "@/lib/live/useLiveMovers";
 import type { Listing } from "@/lib/data-sources/types";
 
-export function TopMovers({ gainers, losers }: { gainers: Listing[]; losers: Listing[] }) {
+const FLASH_CLASS: Record<"up" | "down", string> = {
+  up: "bg-pos-soft",
+  down: "bg-neg-soft",
+};
+
+function MoverRow({ row }: { row: Listing }) {
+  const flash = usePriceFlash(row.priceUsd);
+  return (
+    <li className="flex items-center gap-2.5">
+      <TokenIcon src={row.image} alt={row.symbol} size={28} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{row.symbol}</div>
+      </div>
+      <div className="text-right">
+        <div
+          className={`rounded px-1 text-sm tabular-nums transition-colors duration-300 ${flash ? FLASH_CLASS[flash] : ""}`}
+        >
+          ${row.priceUsd !== null ? (row.priceUsd < 1 ? row.priceUsd.toPrecision(3) : row.priceUsd.toFixed(2)) : "—"}
+        </div>
+        {row.change24hPct !== null && (
+          <div className={`text-xs tabular-nums ${row.change24hPct >= 0 ? "text-pos" : "text-neg"}`}>
+            {row.change24hPct >= 0 ? "+" : ""}
+            {row.change24hPct.toFixed(2)}%
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** `markets` is the server's top-100 snapshot; ranking and prices are then
+ * kept live in the browser (see lib/live/useLiveMovers.ts). */
+export function TopMovers({ markets }: { markets: Listing[] }) {
   const [tab, setTab] = useState<"gainers" | "losers">("gainers");
+  const { gainers, losers, status } = useLiveMovers(markets);
   const rows = tab === "gainers" ? gainers : losers;
 
   return (
@@ -33,25 +69,12 @@ export function TopMovers({ gainers, losers }: { gainers: Listing[]; losers: Lis
       </div>
       <ul className="flex flex-col gap-2.5">
         {rows.map((r) => (
-          <li key={r.id} className="flex items-center gap-2.5">
-            <TokenIcon src={r.image} alt={r.symbol} size={28} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{r.symbol}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm tabular-nums">
-                ${r.priceUsd !== null ? (r.priceUsd < 1 ? r.priceUsd.toPrecision(3) : r.priceUsd.toFixed(2)) : "—"}
-              </div>
-              {r.change24hPct !== null && (
-                <div className={`text-xs tabular-nums ${r.change24hPct >= 0 ? "text-pos" : "text-neg"}`}>
-                  {r.change24hPct >= 0 ? "+" : ""}
-                  {r.change24hPct.toFixed(2)}%
-                </div>
-              )}
-            </div>
-          </li>
+          <MoverRow key={r.id} row={r} />
         ))}
       </ul>
+      <div className="mt-3">
+        <LiveStatusChip status={status} source="Binance" />
+      </div>
     </div>
   );
 }

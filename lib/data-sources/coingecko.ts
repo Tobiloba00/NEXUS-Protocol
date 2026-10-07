@@ -15,17 +15,22 @@ import type { Listing } from "./types";
 
 const BASE = "https://api.coingecko.com/api/v3";
 
-// Server-side fetch: no API key required for this endpoint on the public
-// tier, but a Demo key (free signup) raises the rate limit and can be added
-// later via ?x_cg_demo_api_key= or the x-cg-demo-api-key header.
+// Free Demo plan = 10,000 credits/month, non-commercial, attribution
+// required (coingecko.com/en/api/pricing). Set COINGECKO_API_KEY to send the
+// Demo key; without it requests go through the keyless public tier.
+function headers(): Record<string, string> {
+  const key = process.env.COINGECKO_API_KEY;
+  return key ? { accept: "application/json", "x-cg-demo-api-key": key } : { accept: "application/json" };
+}
+
 export async function fetchTopMarkets(perPage = 100): Promise<Listing[]> {
   try {
     const res = await fetch(
       `${BASE}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=1&sparkline=false&price_change_percentage=24h`,
-      { headers: { accept: "application/json" } }
+      { headers: headers(), cache: "no-store" }
     );
     if (!res.ok) {
-      console.warn(`[coingecko] markets ${res.status}`);
+      console.warn(`[coingecko] markets ${res.status}${res.status === 429 ? " (rate limited / quota exhausted)" : ""}`);
       return [];
     }
     const rows: Array<{
@@ -62,10 +67,17 @@ export async function fetchTopMarkets(perPage = 100): Promise<Listing[]> {
  * take over (see lib/exchanges — Days 5-6). days: 1|7|14|30|90|180|365. */
 export async function fetchOhlc(coinId: string, days: number = 1): Promise<[number, number, number, number, number][]> {
   try {
+    // Cached in Next's data cache so page regenerations and chart range
+    // clicks share one upstream call per (coin, range) instead of one each.
+    // Seeds only: the live WebSocket layers on top, so an hour-old 1d seed is fine.
     const res = await fetch(`${BASE}/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`, {
-      headers: { accept: "application/json" },
+      headers: headers(),
+      next: { revalidate: days <= 1 ? 3600 : 21600 },
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn(`[coingecko] ohlc(${coinId}) ${res.status}`);
+      return [];
+    }
     return await res.json();
   } catch (err) {
     console.warn(`[coingecko] ohlc(${coinId}) failed`, err);

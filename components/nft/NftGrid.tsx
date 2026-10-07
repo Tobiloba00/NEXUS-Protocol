@@ -2,12 +2,26 @@
 
 import { useMemo, useState } from "react";
 import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
+import { LiveStatusChip } from "@/components/status/LiveStatusChip";
+import { usePolled } from "@/lib/live/usePolled";
 import type { NftCollection } from "@/lib/data-sources/types";
 
-const CHAIN_LABEL: Record<string, string> = { solana: "Solana", ethereum: "Ethereum", polygon: "Polygon" };
-const SOURCE_LABEL: Record<string, string> = { magiceden: "Magic Eden", reservoir: "Reservoir", tensor: "Tensor" };
+const REFRESH_MS = 30000;
 
-export function NftGrid({ collections }: { collections: NftCollection[] }) {
+// Magic Eden has no CORS headers, so the browser refreshes via our own
+// CDN-cached route (app/api/live/nft/route.ts) instead of calling it directly.
+async function fetchFreshCollections(): Promise<NftCollection[]> {
+  const res = await fetch("/api/live/nft");
+  const json = await res.json();
+  if (!res.ok || !json.collections?.length) throw new Error("no collections returned");
+  return json.collections;
+}
+
+const CHAIN_LABEL: Record<string, string> = { solana: "Solana", ethereum: "Ethereum", polygon: "Polygon" };
+const SOURCE_LABEL: Record<string, string> = { magiceden: "Magic Eden", tensor: "Tensor" };
+
+export function NftGrid({ collections: initial }: { collections: NftCollection[] }) {
+  const { data: collections, status } = usePolled(fetchFreshCollections, initial, REFRESH_MS);
   const [chain, setChain] = useState("all");
 
   const chains = useMemo(() => Array.from(new Set(collections.map((c) => c.chain))), [collections]);
@@ -15,6 +29,7 @@ export function NftGrid({ collections }: { collections: NftCollection[] }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <LiveStatusChip status={status} source="Magic Eden · every 30s" />
       <div className="flex gap-1.5 overflow-x-auto rounded-lg bg-surface-2 p-1">
         <button
           onClick={() => setChain("all")}

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { fetchTopMarkets, fetchOhlc } from "@/lib/data-sources/coingecko";
-import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
+import { fetchOhlc } from "@/lib/data-sources/coingecko";
+import { getMarkets, getNewListings } from "@/lib/data/cache";
 import { fetchGlobalStats, fetchFearGreed } from "@/lib/data-sources/global-stats";
 import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 import { StatTile } from "@/components/ui/StatTile";
@@ -30,17 +30,13 @@ function formatUsd(n: number | null, opts: { compact?: boolean } = {}) {
 }
 
 export default async function Home() {
-  const [markets, ohlc, globalStats, fearGreed, listings] = await Promise.all([
-    fetchTopMarkets(100),
+  const [{ data: markets }, ohlc, globalStats, fearGreed, { data: listings }] = await Promise.all([
+    getMarkets(100),
     fetchOhlc("bitcoin", 1),
     fetchGlobalStats(),
     fetchFearGreed(),
-    fetchNewTokenProfiles(6),
+    getNewListings(6),
   ]);
-
-  const withChange = markets.filter((m) => m.change24hPct !== null);
-  const gainers = [...withChange].sort((a, b) => (b.change24hPct ?? 0) - (a.change24hPct ?? 0)).slice(0, 5);
-  const losers = [...withChange].sort((a, b) => (a.change24hPct ?? 0) - (b.change24hPct ?? 0)).slice(0, 5);
 
   const btc = markets.find((m) => m.id === "bitcoin");
   const seed: SeedCandle[] = ohlc.map(([time, open, high, low, close]) => ({
@@ -77,7 +73,7 @@ export default async function Home() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.4fr_1fr]">
-        <TopMovers gainers={gainers} losers={losers} />
+        <TopMovers markets={markets} />
 
         <div className="flex flex-col rounded-xl2 border border-line bg-surface">
           <div className="flex items-center justify-between px-4 pt-4">

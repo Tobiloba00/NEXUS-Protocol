@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPairBySlug, LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
-import { fetchOhlc, fetchTopMarkets } from "@/lib/data-sources/coingecko";
+import { fetchOhlc } from "@/lib/data-sources/coingecko";
+import { getMarkets } from "@/lib/data/cache";
 import { PriceChart, type SeedCandle } from "@/components/charts/PriceChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { TokenIcon } from "@/components/ui/TokenIcon";
@@ -38,9 +39,9 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
   const config = getPairBySlug(pair);
   if (!config) notFound();
 
-  const [ohlc, markets] = await Promise.all([
+  const [ohlc, { data: markets }] = await Promise.all([
     fetchOhlc(config.coingeckoId, 1),
-    fetchTopMarkets(100),
+    getMarkets(100),
   ]);
   const icon = markets.find((m) => m.id === config.coingeckoId)?.image ?? null;
   const seed: SeedCandle[] = ohlc.map(([time, open, high, low, close]) => ({
