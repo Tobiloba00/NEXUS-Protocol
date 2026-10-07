@@ -5,6 +5,8 @@ import { ChevronLeft } from "lucide-react";
 import { getPairBySlug, LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 import { fetchOhlc } from "@/lib/data-sources/coingecko";
 import { getMarkets } from "@/lib/data/cache";
+import { fetchCrowdLadder } from "@/lib/data-sources/polymarket";
+import { CrowdLadder } from "@/components/crowd/CrowdLadder";
 import { Page } from "@/components/layout/Page";
 import { PriceChart, type SeedCandle } from "@/components/charts/PriceChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
@@ -18,6 +20,8 @@ import { TradeTape } from "@/components/trading/TradeTape";
 // The live price itself never depends on this — that's the client-side
 // Binance WS island below, seeded here only for first paint/SEO.
 export const revalidate = 300;
+
+const CROWD_ASSETS: Record<string, string> = { BTC: "Bitcoin", ETH: "Ethereum", SOL: "Solana" };
 
 export async function generateStaticParams() {
   return LAUNCH_PAIRS.map((p) => ({ pair: p.slug }));
@@ -42,9 +46,12 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
   const config = getPairBySlug(pair);
   if (!config) notFound();
 
-  const [ohlc, { data: markets }] = await Promise.all([
+  // Prediction-market odds exist for a few majors; skip the fetch for the rest.
+  const crowdAsset = config.quote === "USDT" ? CROWD_ASSETS[config.base] : undefined;
+  const [ohlc, { data: markets }, ladder] = await Promise.all([
     fetchOhlc(config.coingeckoId, 1),
     getMarkets(100),
+    crowdAsset ? fetchCrowdLadder(crowdAsset) : Promise.resolve(null),
   ]);
   const coin = markets.find((m) => m.id === config.coingeckoId);
   const seed: SeedCandle[] = ohlc.map(([time, open, high, low, close]) => ({
@@ -91,6 +98,8 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
           <TradeTape key={`${config.binanceSymbol}-tape`} symbol={config.binanceSymbol} />
         </div>
       </div>
+
+      <CrowdLadder initial={ladder} symbol={config.binanceSymbol} base={config.base} />
     </Page>
   );
 }

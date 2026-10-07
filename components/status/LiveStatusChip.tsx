@@ -34,7 +34,7 @@ export function LiveStatusChip({ status, source }: { status: LiveStatus; source?
           : "bg-ink-500";
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12.5px] tracking-[-0.005em] text-ink-400">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[12.5px] tracking-[-0.005em] text-ink-400">
       <span className={`h-[7px] w-[7px] rounded-full ${dotClass}`} aria-hidden />
       {label}
     </span>

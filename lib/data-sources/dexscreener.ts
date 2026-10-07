@@ -1,4 +1,4 @@
-import type { Listing } from "./types";
+import type { Listing, ListingSignals } from "./types";
 
 /**
  * DexScreener public API — keyless, confirmed working. Net-new for the
@@ -23,12 +23,14 @@ type TokenProfile = {
 type DexPair = {
   baseToken: { address: string; name: string; symbol: string };
   priceUsd?: string;
-  priceChange?: { h24?: number };
+  priceChange?: { m5?: number; h1?: number; h24?: number };
+  txns?: Record<"m5" | "h1" | "h24", { buys?: number; sells?: number } | undefined>;
+  volume?: { h24?: number };
   marketCap?: number;
   fdv?: number;
   liquidity?: { usd?: number };
   pairCreatedAt?: number;
-  info?: { imageUrl?: string };
+  info?: { imageUrl?: string; socials?: unknown[]; websites?: unknown[] };
 };
 
 export async function fetchNewTokenProfiles(limit = 20): Promise<Listing[]> {
@@ -112,5 +114,23 @@ function toListing(chainId: string, address: string, pair: DexPair): Listing {
     liquidityUsd: pair.liquidity?.usd ?? null,
     pairCreatedAt: pair.pairCreatedAt ?? null,
     link: `https://dexscreener.com/${chainId}/${address}`,
+    signals: toSignals(pair),
+  };
+}
+
+function toSignals(pair: DexPair): ListingSignals {
+  const t = pair.txns ?? ({} as NonNullable<DexPair["txns"]>);
+  return {
+    buys5m: t.m5?.buys ?? 0,
+    sells5m: t.m5?.sells ?? 0,
+    buys1h: t.h1?.buys ?? 0,
+    sells1h: t.h1?.sells ?? 0,
+    buys24h: t.h24?.buys ?? 0,
+    sells24h: t.h24?.sells ?? 0,
+    volume24hUsd: pair.volume?.h24 ?? null,
+    fdvUsd: pair.fdv ?? null,
+    change1hPct: pair.priceChange?.h1 ?? null,
+    hasSocials: (pair.info?.socials?.length ?? 0) > 0,
+    hasWebsite: (pair.info?.websites?.length ?? 0) > 0,
   };
 }
