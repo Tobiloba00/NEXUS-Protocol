@@ -29,35 +29,14 @@ export type Voice = {
 const UA = "NexusProtocol/1.0 (+https://nexus-protocol-inky.vercel.app)";
 const TTL_MS = 5 * 60_000;
 
-/** Newest items sit at the top of a feed, so the first few hundred KB is all
- * we ever need. Some feeds are enormous (one podcast feed is ~18 MB of back
- * catalogue) — never download or cache all of that. */
-const MAX_FEED_BYTES = 300_000;
+/** Safety valve only: every feed we use is under ~550 KB (Next.js can cache up
+ * to 2 MB per fetch), so anything bigger is treated as a misbehaving feed. */
+const MAX_FEED_CHARS = 1_500_000;
 
-// Warm-instance cache (pages are also ISR-cached; this protects the Ask tool,
-// which would otherwise refetch every feed on each question).
+// Warm-instance memo on top of Next's fetch cache — it keeps the Ask tool from
+// re-reading feeds on every question.
 const memo = new Map<string, { at: number; items: NewsItem[] }>();
 
-async function readLimited(res: Response, maxBytes: number): Promise<string> {
-  if (!res.body) return (await res.text()).slice(0, maxBytes);
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (total < maxBytes) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.byteLength;
-  }
-  await reader.cancel().catch(() => {});
-  const buf = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) {
-    buf.set(c, off);
-    off += c.byteLength;
-  }
-  return new TextDecoder().decode(buf);
-}
 
 export const NEWS_SOURCES: { name: string; feed: string }[] = [
   { name: "CoinDesk", feed: "https://www.coindesk.com/arc/outboundfeeds/rss/" },
@@ -126,14 +105,17 @@ async function fetchFeed(source: string, feed: string, limit: number): Promise<N
   try {
     const res = await fetch(feed, {
       headers: { "user-agent": UA, accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" },
-      cache: "no-store", // bounded by readLimited + the memo above + page-level ISR
+      // Cached by Next (shared across requests and revalidated every 10 minutes).
+      // Do NOT use no-store here: inside an ISR page it opts the whole route out
+      // of static rendering and the build bakes in empty data.
+      next: { revalidate: 600 },
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
       console.warn(`[news] ${source} ${res.status}`);
       return hit?.items.slice(0, limit) ?? [];
     }
-    const items = parseFeed(await readLimited(res, MAX_FEED_BYTES), source, 30);
+    const items = parseFeed((await res.text()).slice(0, MAX_FEED_CHARS), source, 30);
     memo.set(feed, { at: Date.now(), items });
     return items.slice(0, limit);
   } catch (err) {
