@@ -82,9 +82,7 @@ export default async function Home() {
     <Page>
       <PageHeader title="Markets" subtitle="Crypto, NFTs and prediction odds — live, in one place." />
 
-      {brief && <BriefCard brief={brief} />}
-
-      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[22px] bg-line lg:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[22px] bg-line md:grid-cols-4">
         <Pulse
           label="Market cap"
           value={formatUsd(globalStats.totalMarketCapUsd, { compact: true })}
@@ -121,11 +119,13 @@ export default async function Home() {
         </div>
       </section>
 
+      {brief && <BriefCard brief={brief} />}
+
       <div className="rise rise-2">
         <CrowdLadder initial={ladder} symbol="BTCUSDT" base="BTC" />
       </div>
 
-      <div className="rise rise-2 grid grid-cols-1 gap-9 lg:grid-cols-2 lg:gap-8">
+      <div className="rise rise-2 grid grid-cols-1 gap-9 md:grid-cols-2 md:items-start md:gap-6 lg:gap-8">
         <TopMovers markets={markets} />
 
         <section>
@@ -159,12 +159,12 @@ export default async function Home() {
 
       <section className="rise rise-3">
         <SectionHeader title="New Listings" href="/new-listings" hrefLabel="See all" />
-        <div className="no-scrollbar -mx-5 flex snap-x scroll-pl-5 gap-3 overflow-x-auto px-5 pb-1 sm:-mx-8 sm:scroll-pl-8 sm:px-8 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-4 lg:overflow-visible lg:px-0">
+        <div className="no-scrollbar -mx-5 flex snap-x scroll-pl-5 gap-3 overflow-x-auto px-5 pb-1 sm:-mx-8 sm:scroll-pl-8 sm:px-8 md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0">
           {listings.map((l) => (
             <Link
               key={l.id}
               href="/new-listings"
-              className="press group-card flex w-[176px] shrink-0 snap-start flex-col gap-3 p-4 lg:w-auto"
+              className="press group-card flex w-[176px] shrink-0 snap-start flex-col gap-3 p-4 md:w-auto"
             >
               <TokenIcon src={l.image} alt={l.symbol} size={40} />
               <div className="min-w-0">

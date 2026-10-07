@@ -39,7 +39,7 @@ export function Segmented<T extends string>({
           role="tab"
           aria-selected={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`relative z-10 whitespace-nowrap px-3.5 py-[5px] text-[13px] font-medium tracking-[-0.005em] transition-colors ${
+          className={`relative z-10 whitespace-nowrap px-3.5 py-[9px] text-[13.5px] md:py-[5px] md:text-[13px] font-medium tracking-[-0.005em] transition-colors ${
             o.value === value ? "text-ink-50" : "text-ink-300"
           }`}
         >

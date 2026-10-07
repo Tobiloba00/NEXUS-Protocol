@@ -11,6 +11,7 @@ import { Page } from "@/components/layout/Page";
 import { PriceChart, type SeedCandle } from "@/components/charts/PriceChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { TokenIcon } from "@/components/ui/TokenIcon";
+import { AiInsightButton } from "@/components/ask/AiInsightButton";
 import { OrderBook } from "@/components/trading/OrderBook";
 import { TradeTape } from "@/components/trading/TradeTape";
 
@@ -81,6 +82,10 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
               <p className="text-[13px] text-ink-400">{coin?.name ?? config.base}</p>
             </div>
           </div>
+          <AiInsightButton
+            className="self-start"
+            question={`Give me an insight on ${coin?.name ?? config.base}: price and 24h move, where it ranks among movers, and what the crowd odds say if available.`}
+          />
           <LiveTicker
             key={config.binanceSymbol}
             symbol={config.binanceSymbol}

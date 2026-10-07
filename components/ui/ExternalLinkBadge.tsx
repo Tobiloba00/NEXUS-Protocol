@@ -11,7 +11,7 @@ export function ExternalLinkBadge({ href, label }: { href: string; label: string
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="press inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[13px] font-medium tracking-[-0.005em] text-accent hover:opacity-80"
+      className="press -my-2 inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap py-2 text-[13.5px] font-medium tracking-[-0.005em] text-accent hover:opacity-80"
     >
       {label}
       <span aria-hidden className="text-[11px]">↗</span>

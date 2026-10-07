@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { askNexus, type ChatTurn } from "@/lib/ai/ask";
 import { GeminiError, geminiConfigured } from "@/lib/ai/gemini";
 import { ipAllowed, spendDailyBudget } from "@/lib/ai/limits";
+import { AI_DISCLAIMER } from "@/lib/legal/terms";
 
 const MAX_QUESTION = 300;
 const MAX_HISTORY = 6;
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const { answer, tools } = await askNexus(history, question);
-    return NextResponse.json({ ok: true, answer, tools }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ok: true, answer, tools, disclaimer: AI_DISCLAIMER }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     console.warn("[ask] failed", err);
     if (err instanceof GeminiError && err.status === 429) return fail("The AI is busy right now. Try again in a minute.", 429);

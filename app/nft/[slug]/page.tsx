@@ -8,8 +8,8 @@ import {
 } from "@/lib/data-sources/magiceden";
 import { Page, PageHeader } from "@/components/layout/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
 import { TokenIcon } from "@/components/ui/TokenIcon";
+import { AiInsightButton } from "@/components/ask/AiInsightButton";
 
 export const revalidate = 120;
 
@@ -63,7 +63,21 @@ export default async function CollectionDetailPage({
         </Link>
         <PageHeader
           title={slug.replace(/[-_]/g, " ")}
-          trailing={<ExternalLinkBadge href={`https://magiceden.io/marketplace/${slug}`} label="Magic Eden" />}
+          trailing={
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <AiInsightButton
+                question={`Give me an insight on the ${slug.replace(/[-_]/g, " ")} NFT collection: its floor, how much is listed, recent sales and anything unusual.`}
+              />
+              <a
+                href={`https://magiceden.io/marketplace/${slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="press inline-flex h-10 items-center gap-1 rounded-full bg-accent px-4 text-[14px] font-semibold text-white"
+              >
+                Buy on Magic Eden <span aria-hidden>↗</span>
+              </a>
+            </div>
+          }
         />
       </div>
 

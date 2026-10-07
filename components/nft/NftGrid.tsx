@@ -91,7 +91,7 @@ export function NftGrid({ collections: initial }: { collections: NftCollection[]
         <LiveStatusChip status={status} source="Magic Eden · every minute" />
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4">
         {filtered.map((c) => (
           <Tile key={c.id} c={c} />
         ))}

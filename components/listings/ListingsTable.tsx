@@ -8,6 +8,7 @@ import { Segmented } from "@/components/ui/Segmented";
 import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
 import { LiveStatusChip } from "@/components/status/LiveStatusChip";
 import { RiskBadge } from "./RiskBadge";
+import { AiInsightButton } from "@/components/ask/AiInsightButton";
 import { SecurityScan } from "./SecurityScan";
 import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
 import { assessRisk, type RiskAssessment } from "@/lib/risk/score";
@@ -87,7 +88,13 @@ function RiskDetail({ listing, risk }: { listing: Listing; risk: RiskAssessment 
         The rating is an automated heuristic from trading data. It flags common red flags but can&apos;t guarantee
         a token is safe or a scam. Not financial advice.
       </p>
-      <ExternalLinkBadge href={listing.link} label="Open on DexScreener" />
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+        <AiInsightButton
+          label="AI insight on this token"
+          question={`Give me an insight on the new ${listing.symbol} token (${listing.name}) on ${chain}: liquidity, age, trading balance and the main risk factors from the data.`}
+        />
+        <ExternalLinkBadge href={listing.link} label="Open on DexScreener" />
+      </div>
     </div>
   );
 }

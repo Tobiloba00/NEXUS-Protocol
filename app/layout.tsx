@@ -1,9 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppConfigProvider } from "@/components/config/AppConfigProvider";
 import { TopNav } from "@/components/layout/TopNav";
 import { MobileTabBar } from "@/components/layout/MobileNav";
+import { SiteFooter } from "@/components/layout/SiteFooter";
+import { TermsGate } from "@/components/legal/TermsGate";
+import { AskLauncher } from "@/components/ask/AskLauncher";
+import { TERMS_STORAGE_KEY, TERMS_VERSION } from "@/lib/legal/terms";
 import { CONFIG_STORAGE_KEY, THEME_STORAGE_KEY } from "@/lib/config/project-config";
 
 // Inter is only the fallback: Apple devices use their own SF Pro via
@@ -14,7 +18,26 @@ const inter = Inter({
   display: "swap",
 });
 
+// viewportFit "cover" is what makes env(safe-area-inset-*) report real values
+// on notched iPhones — without it the tab bar and sheets sit under the home
+// indicator. "resizes-content" makes Android shrink the layout (not overlay it)
+// when the keyboard opens, so bottom-pinned inputs stay visible.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+  colorScheme: "dark light",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2f2f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
+};
+
 export const metadata: Metadata = {
+  applicationName: "NEXUS",
+  appleWebApp: { capable: true, title: "NEXUS", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: {
     default: "NEXUS Protocol — Live Crypto Prices, Listings, NFTs & Predictions",
@@ -31,6 +54,14 @@ export const metadata: Metadata = {
 // wrong-look on reload, without needing SSR to know the visitor's localStorage.
 const noFlashScript = `
 (function () {
+  // Agreement gate: show it (via CSS on this attribute) until the visitor has
+  // accepted the CURRENT terms version. Set before first paint — no flash.
+  try {
+    var t = JSON.parse(localStorage.getItem(${JSON.stringify(TERMS_STORAGE_KEY)}) || "null");
+    if (!t || t.v !== ${JSON.stringify(TERMS_VERSION)}) document.documentElement.setAttribute("data-terms", "needed");
+  } catch (e) {
+    document.documentElement.setAttribute("data-terms", "needed");
+  }
   try {
     var theme = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
     if (theme === "light" || theme === "dark") {
@@ -58,15 +89,19 @@ const noFlashScript = `
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
       </head>
       <body className="min-h-full bg-bg font-sans text-ink-50">
         <AppConfigProvider>
           <TopNav />
-          <div className="pb-[calc(88px+env(safe-area-inset-bottom))] lg:pb-16">{children}</div>
+          <div>{children}</div>
+          <SiteFooter />
+          <div className="h-[calc(76px+env(safe-area-inset-bottom))] lg:hidden" aria-hidden />
           <MobileTabBar />
+          <AskLauncher />
+          <TermsGate />
         </AppConfigProvider>
       </body>
     </html>

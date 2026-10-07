@@ -6,6 +6,7 @@ import { fetchTokenDetail } from "@/lib/data-sources/magiceden";
 import { Page } from "@/components/layout/Page";
 import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
 import { TokenIcon } from "@/components/ui/TokenIcon";
+import { AiInsightButton } from "@/components/ask/AiInsightButton";
 
 export const revalidate = 300;
 
@@ -55,6 +56,25 @@ export default async function NftDetailPage({
                 {token.collectionName}
               </Link>
             )}
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <a
+              href={`https://magiceden.io/item-details/${mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="press flex h-[50px] items-center justify-center gap-1.5 rounded-[14px] bg-accent text-[16px] font-semibold text-white"
+            >
+              Buy on Magic Eden <span aria-hidden>↗</span>
+            </a>
+            <p className="px-1 text-[12.5px] leading-snug text-ink-400">
+              You&apos;ll finish the purchase on Magic Eden. NEXUS never handles your funds or your wallet. Information only —
+              not financial advice.
+            </p>
+            <AiInsightButton
+              className="self-start"
+              question={`Give me an insight on the ${token.collectionName ?? slug.replace(/[-_]/g, " ")} NFT collection: floor, supply listed and recent sales.`}
+            />
           </div>
 
           <div className="group-card flex items-center justify-between gap-3 px-4 py-3.5">

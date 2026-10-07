@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, MessageCircle } from "lucide-react";
+import { Bell, Newspaper, Sparkles } from "lucide-react";
+import { OPEN_ASK_EVENT } from "@/components/ask/AskLauncher";
 import { Logo } from "./Logo";
 import { SiteSearch } from "./SiteSearch";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -16,7 +17,7 @@ export function TopNav() {
   const pathname = usePathname();
 
   return (
-    <header className="glass sticky top-0 z-40 border-b border-line">
+    <header className="glass sticky top-0 z-40 border-b border-line pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-14 w-full max-w-[1120px] items-center gap-6 px-5 sm:px-8">
         <Logo />
 
@@ -43,15 +44,22 @@ export function TopNav() {
             <SiteSearch />
           </div>
           <Link
-            href="/ask"
-            className="press flex h-9 w-9 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
-            aria-label="Ask Nexus"
+            href="/news"
+            className="press flex h-11 w-11 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
+            aria-label="News"
           >
-            <MessageCircle className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            <Newspaper className="h-[19px] w-[19px]" strokeWidth={1.75} />
           </Link>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent(OPEN_ASK_EVENT))}
+            className="press flex h-11 w-11 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
+            aria-label="Ask Nexus, the AI assistant"
+          >
+            <Sparkles className="h-[19px] w-[19px]" strokeWidth={1.75} />
+          </button>
           <Link
             href="/alerts"
-            className="press flex h-9 w-9 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
+            className="press flex h-11 w-11 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
             aria-label="Alerts"
           >
             <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />

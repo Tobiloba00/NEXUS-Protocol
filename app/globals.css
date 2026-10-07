@@ -68,7 +68,7 @@
     --ink-100: #1c1c1e;
     --ink-200: #3a3a3c;
     --ink-300: #636366;
-    --ink-400: #8a8a8e;
+    --ink-400: #6c6c70;
     --ink-500: #aeaeb2;
     --ink-600: #c7c7cc;
 
@@ -107,7 +107,7 @@
   --ink-100: #1c1c1e;
   --ink-200: #3a3a3c;
   --ink-300: #636366;
-  --ink-400: #8a8a8e;
+  --ink-400: #6c6c70;
   --ink-500: #aeaeb2;
   --ink-600: #c7c7cc;
 
@@ -178,6 +178,25 @@ html {
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Touch polish: no 300ms tap delay, no grey tap flash (our own press states
+   replace it), and horizontal swipes inside carousels don't pull the page. */
+a,
+button,
+[role="tab"],
+input,
+select {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.no-scrollbar {
+  overscroll-behavior-x: contain;
 }
 
 body {
@@ -327,4 +346,29 @@ button.list-row:hover {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* ---------- Agreement gate (see components/legal/TermsGate.tsx) ---------- */
+#terms-cover,
+#terms-gate {
+  display: none;
+}
+html[data-terms="needed"] #terms-cover {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--backdrop);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+html[data-terms="needed"] #terms-gate {
+  display: flex;
+  align-items: flex-start;
+  position: fixed;
+  inset: 0;
+  z-index: 91;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
 }

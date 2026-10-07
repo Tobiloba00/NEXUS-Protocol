@@ -3,6 +3,9 @@ import { fetchGlobalStats, fetchFearGreed } from "@/lib/data-sources/global-stat
 import { fetchCrowdLadder } from "@/lib/data-sources/polymarket";
 import { crowdMedian, probAbove } from "@/lib/crowd/ladder-math";
 import { assessRisk } from "@/lib/risk/score";
+import { fetchNews } from "@/lib/data-sources/news";
+import { fetchBinanceListings } from "@/lib/data-sources/exchange-listings";
+import { fetchCollectionActivity, fetchCollectionStats } from "@/lib/data-sources/magiceden";
 
 /**
  * The only things the AI can see. Each tool reads NEXUS's own data layer
@@ -71,6 +74,33 @@ export const TOOL_DECLARATIONS = [
       type: "OBJECT",
       properties: { asset: { type: "STRING", description: "'Bitcoin', 'Ethereum' or 'Solana'" } },
       required: ["asset"],
+    },
+  },
+  {
+    name: "get_nft_collection",
+    description:
+      "Deeper look at ONE NFT collection: floor price, how many are listed, average price over 24h, 7-day volume and its most recent on-chain sales and bids. Find it by name (for example Stonk Inus) or by Magic Eden slug.",
+    parameters: {
+      type: "OBJECT",
+      properties: { query: { type: "STRING", description: "Collection name or slug" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_news",
+    description:
+      "Latest crypto news headlines (title, outlet, time) from CoinDesk, Cointelegraph, Decrypt, The Block and Bitcoin Magazine. Headlines only, no article text.",
+    parameters: {
+      type: "OBJECT",
+      properties: { limit: { type: "INTEGER", description: "How many headlines (1-15, default 8)" } },
+    },
+  },
+  {
+    name: "get_exchange_listings",
+    description: "Coins that Binance has just announced it will list or launch, with the ticker each one lists as.",
+    parameters: {
+      type: "OBJECT",
+      properties: { limit: { type: "INTEGER", description: "How many announcements (1-10, default 6)" } },
     },
   },
   {
@@ -206,6 +236,50 @@ export async function runTool(name: string, args: Record<string, unknown> = {}):
       const { data } = await getNftCollections(20);
       return {
         collections: data.slice(0, limit).map((c) => ({ name: c.name, chain: c.chain, floor: c.floorPrice, currency: c.currency, volume7d: round(c.volume7d, 4) })),
+      };
+    }
+
+    case "get_nft_collection": {
+      const q = String(args.query ?? "").trim().toLowerCase();
+      if (!q) return { error: "query is required" };
+      const { data } = await getNftCollections(40);
+      const hit =
+        data.find((c) => c.slug?.toLowerCase() === q) ??
+        data.find((c) => c.name.toLowerCase() === q) ??
+        data.find((c) => c.name.toLowerCase().includes(q));
+      if (!hit?.slug) return { found: false, note: "That collection isn't among the tracked active collections." };
+      const [stats, activity] = await Promise.all([fetchCollectionStats(hit.slug), fetchCollectionActivity(hit.slug, 12)]);
+      const sales = activity.filter((a) => a.type === "buyNow" && a.price !== null);
+      return {
+        found: true,
+        name: hit.name,
+        currency: "SOL",
+        floor: round(stats.floorPrice, 4),
+        listedCount: stats.listedCount,
+        avgPrice24h: round(stats.avgPrice24h, 4),
+        volume7d: round(stats.volume7d, 4),
+        recentSales: sales.slice(0, 6).map((a) => ({
+          price: a.price,
+          secondsAgo: a.blockTime ? Math.round(Date.now() / 1000 - a.blockTime) : null,
+        })),
+        recentEventCounts: activity.reduce<Record<string, number>>((acc, a) => {
+          acc[a.type] = (acc[a.type] ?? 0) + 1;
+          return acc;
+        }, {}),
+      };
+    }
+
+    case "get_news": {
+      const limit = clamp(args.limit, 1, 15, 8);
+      const news = await fetchNews(limit);
+      return { headlines: news.map((n) => ({ title: n.title, outlet: n.source, publishedAt: n.publishedAt })) };
+    }
+
+    case "get_exchange_listings": {
+      const limit = clamp(args.limit, 1, 10, 6);
+      const rows = await fetchBinanceListings();
+      return {
+        announcements: rows.slice(0, limit).map((l) => ({ title: l.title, tickers: l.tickers, kind: l.kind, publishedAt: l.publishedAt })),
       };
     }
 

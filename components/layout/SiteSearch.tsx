@@ -8,9 +8,11 @@ import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 const STATIC_PAGES = [
   { label: "Home", href: "/" },
   { label: "Markets", href: "/markets" },
-  { label: "New Listings", href: "/new-listings" },
+  { label: "New Coins", href: "/new-listings" },
   { label: "NFTs", href: "/nft" },
   { label: "Predictions", href: "/predictions" },
+  { label: "News", href: "/news" },
+  { label: "Ask Nexus (AI)", href: "/ask" },
   { label: "Alerts", href: "/alerts" },
 ];
 

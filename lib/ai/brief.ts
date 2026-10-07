@@ -16,8 +16,9 @@ const BRIEF_PROMPT =
   "Write today's NEXUS market brief for the home page, as three short paragraphs separated by blank lines: " +
   "(1) overall market mood, using the market overview and the Fear & Greed reading; " +
   "(2) the biggest gainers and losers among the top coins; " +
-  "(3) what Polymarket's crowd expects for Bitcoin at the next settlement, if that data is available (otherwise skip this paragraph). " +
-  "About 110 words in total. Use only tool data. No headings, no bullet points, no advice.";
+  "(3) what Polymarket's crowd expects for Bitcoin at the next settlement, if that data is available (otherwise skip this paragraph); " +
+  "(4) one sentence on the biggest story in the news headlines, attributed to its outlet. " +
+  "About 130 words in total. Use only tool data. No headings, no bullet points, no advice.";
 
 /** Don't write "today's" brief in the first hours of the UTC day, when there
  * is barely any of the day's movement to describe. */
