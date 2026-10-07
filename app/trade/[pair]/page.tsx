@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { getPairBySlug, LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 import { fetchOhlc } from "@/lib/data-sources/coingecko";
 import { getMarkets } from "@/lib/data/cache";
+import { Page } from "@/components/layout/Page";
 import { PriceChart, type SeedCandle } from "@/components/charts/PriceChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { TokenIcon } from "@/components/ui/TokenIcon";
@@ -30,7 +33,7 @@ export async function generateMetadata({
   if (!config) return {};
   return {
     title: `${config.base}/${config.quote} Live Price & Chart`,
-    description: `Live ${config.base}/${config.quote} price, 24h change, and real-time candlestick chart — streamed directly from Binance, free, no signup.`,
+    description: `Live ${config.base}/${config.quote} price, 24h change, and real-time candlestick chart — streamed directly from the exchange, free, no signup.`,
   };
 }
 
@@ -43,7 +46,7 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
     fetchOhlc(config.coingeckoId, 1),
     getMarkets(100),
   ]);
-  const icon = markets.find((m) => m.id === config.coingeckoId)?.image ?? null;
+  const coin = markets.find((m) => m.id === config.coingeckoId);
   const seed: SeedCandle[] = ohlc.map(([time, open, high, low, close]) => ({
     time: Math.floor(time / 1000) as SeedCandle["time"],
     open,
@@ -54,15 +57,23 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
   const seedPrice = seed.length ? seed[seed.length - 1].close : null;
 
   return (
-    <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-12">
-      <div>
-        <div className="flex items-center gap-2">
-          <TokenIcon src={icon} alt={config.base} size={28} />
-          <h1 className="text-xl font-semibold">
-            {config.base}/{config.quote}
-          </h1>
-        </div>
-        <div className="mt-2">
+    <Page>
+      <div className="flex flex-col gap-6">
+        <Link href="/markets" className="press -ml-1 inline-flex items-center gap-0.5 self-start text-[15px] font-medium text-accent">
+          <ChevronLeft className="h-5 w-5" strokeWidth={2.2} />
+          Markets
+        </Link>
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center gap-3">
+            <TokenIcon src={coin?.image} alt={config.base} size={36} />
+            <div>
+              <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.025em]">
+                {config.base}
+                <span className="font-normal text-ink-400">/{config.quote}</span>
+              </h1>
+              <p className="text-[13px] text-ink-400">{coin?.name ?? config.base}</p>
+            </div>
+          </div>
           <LiveTicker
             key={config.binanceSymbol}
             symbol={config.binanceSymbol}
@@ -72,15 +83,14 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
           />
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
-        <div className="rounded-xl2 border border-line bg-surface p-2">
-          <PriceChart key={config.binanceSymbol} symbol={config.binanceSymbol} seed={seed} />
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
+
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_330px]">
+        <PriceChart key={config.binanceSymbol} symbol={config.binanceSymbol} seed={seed} />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-1">
           <OrderBook key={`${config.binanceSymbol}-book`} symbol={config.binanceSymbol} />
           <TradeTape key={`${config.binanceSymbol}-tape`} symbol={config.binanceSymbol} />
         </div>
       </div>
-    </main>
+    </Page>
   );
 }

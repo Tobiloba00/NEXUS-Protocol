@@ -2,42 +2,44 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 import { getMarkets } from "@/lib/data/cache";
-import { LiveTicker } from "@/components/charts/LiveTicker";
+import { Page, PageHeader } from "@/components/layout/Page";
+import { CompactPrice } from "@/components/charts/CompactPrice";
 import { TokenIcon } from "@/components/ui/TokenIcon";
 
-export const revalidate = 300; // just for the icon lookup — prices themselves are live via WS
+export const revalidate = 300; // just for the icon/name lookup — prices themselves are live via WS
 
 export const metadata: Metadata = {
   title: "Live Markets",
-  description: "Live crypto prices across 8 pairs, streamed directly from Binance in real time.",
+  description: "Live crypto prices across 8 pairs, streamed directly from the exchange in real time.",
 };
 
 export default async function MarketsPage() {
   const { data: markets } = await getMarkets(100);
-  const iconByCoinId = new Map(markets.map((m) => [m.id, m.image]));
+  const byCoinId = new Map(markets.map((m) => [m.id, m]));
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-12">
-      <h1 className="text-xl font-semibold">Live Markets</h1>
-      <p className="text-sm text-ink-400">
-        Real-time prices streamed directly from Binance — click a pair for its full chart.
-      </p>
-      <ul className="mt-4 flex flex-col divide-y divide-line rounded-xl2 border border-line bg-surface">
-        {LAUNCH_PAIRS.map((pair) => (
-          <li key={pair.slug}>
-            <Link
-              href={`/trade/${pair.slug}`}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-hover"
-            >
-              <TokenIcon src={iconByCoinId.get(pair.coingeckoId)} alt={pair.base} />
-              <span className="flex-1 font-medium">
-                {pair.base}/{pair.quote}
-              </span>
-              <LiveTicker key={pair.binanceSymbol} symbol={pair.binanceSymbol} base={pair.base} quote={pair.quote} />
-            </Link>
-          </li>
-        ))}
+    <Page narrow>
+      <PageHeader title="Markets" subtitle="Real-time prices, straight from the exchange. Tap a pair for its full chart." />
+      <ul className="group-card" style={{ "--sep-inset": "68px" } as React.CSSProperties}>
+        {LAUNCH_PAIRS.map((pair) => {
+          const m = byCoinId.get(pair.coingeckoId);
+          return (
+            <li key={pair.slug} className="list-row">
+              <Link href={`/trade/${pair.slug}`} className="list-row flex items-center gap-3.5 px-4 py-3.5">
+                <TokenIcon src={m?.image} alt={pair.base} size={40} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[17px] font-semibold tracking-[-0.018em]">
+                    {pair.base}
+                    <span className="font-normal text-ink-400">/{pair.quote}</span>
+                  </div>
+                  <div className="truncate text-[13px] text-ink-400">{m?.name ?? pair.base}</div>
+                </div>
+                <CompactPrice key={pair.binanceSymbol} symbol={pair.binanceSymbol} seedPrice={m?.priceUsd ?? null} />
+              </Link>
+            </li>
+          );
+        })}
       </ul>
-    </main>
+    </Page>
   );
 }

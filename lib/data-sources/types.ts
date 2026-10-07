@@ -25,6 +25,7 @@ export type NftCollection = {
   floorPrice: number | null;
   currency: string;
   volume24h: number | null;
+  volume7d: number | null; // native currency; used to rank active collections
   link: string;
   // Source's own collection identifier (Magic Eden's "symbol", e.g.
   // "degods") — needed to call per-collection listings/activity endpoints

@@ -1,15 +1,17 @@
 /**
- * Tri-state live-data status chip, ported from legacy/index.html:3339-3364
- * (MarketDataChip) and the activity-feed StatusChip at 3192-3206. Same
- * three states, same rule: only ever drops to "stale" if the feed was
+ * Tri-state live-data indicator, ported from legacy/index.html:3339-3364
+ * (MarketDataChip). Same rule: only ever drops to "stale" if the feed was
  * previously live, otherwise "mock" — never show a shorter path than what
  * actually happened. Reused across every module (prices, listings, NFTs,
- * predictions) rather than each one growing its own chip.
+ * predictions).
+ *
+ * Visually it's just a dot and a caption — no border, no pill — so it reads
+ * as a footnote, not as another control competing for attention.
  */
 
 // "delayed" = the live feed never connected (blocked network, source down),
 // so the page is showing the server's last cached snapshot. Said plainly
-// instead of leaving a "Reconnecting…" chip spinning forever.
+// instead of leaving a "Reconnecting…" label spinning forever.
 export type LiveStatus = "live" | "stale" | "mock" | "delayed";
 
 export function LiveStatusChip({ status, source }: { status: LiveStatus; source?: string }) {
@@ -17,23 +19,23 @@ export function LiveStatusChip({ status, source }: { status: LiveStatus; source?
     status === "live"
       ? `Live${source ? ` · ${source}` : ""}`
       : status === "stale"
-        ? "Reconnecting…"
+        ? "Connecting…"
         : status === "delayed"
           ? "Delayed · cached snapshot"
           : "Sample data";
 
   const dotClass =
     status === "live"
-      ? "bg-pos"
+      ? "bg-pos live-dot"
       : status === "stale"
-        ? "bg-neg animate-pulse"
+        ? "bg-ink-400 animate-pulse"
         : status === "delayed"
           ? "bg-warn"
           : "bg-ink-500";
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-xs text-ink-300">
-      <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
+    <span className="inline-flex items-center gap-1.5 text-[12.5px] tracking-[-0.005em] text-ink-400">
+      <span className={`h-[7px] w-[7px] rounded-full ${dotClass}`} aria-hidden />
       {label}
     </span>
   );

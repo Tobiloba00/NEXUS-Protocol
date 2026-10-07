@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { TokenIcon } from "@/components/ui/TokenIcon";
+import { ChangePill } from "@/components/ui/ChangePill";
+import { Segmented } from "@/components/ui/Segmented";
 import { ExternalLinkBadge } from "@/components/ui/ExternalLinkBadge";
 import { LiveStatusChip } from "@/components/status/LiveStatusChip";
 import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
@@ -17,19 +19,24 @@ async function fetchFreshListings() {
 }
 
 function formatAge(pairCreatedAt: number | null) {
-  if (!pairCreatedAt) return "—";
+  if (!pairCreatedAt) return null;
   const ms = Date.now() - pairCreatedAt;
   const hours = ms / 3_600_000;
-  if (hours < 1) return `${Math.max(1, Math.round(ms / 60_000))}m`;
-  if (hours < 24) return `${Math.round(hours)}h`;
-  return `${Math.round(hours / 24)}d`;
+  if (hours < 1) return `${Math.max(1, Math.round(ms / 60_000))}m ago`;
+  if (hours < 24) return `${Math.round(hours)}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
 function formatCompactUsd(n: number | null) {
-  if (n === null) return "—";
+  if (n === null) return null;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
   return `$${n.toFixed(0)}`;
+}
+
+function formatPrice(p: number | null) {
+  if (p === null) return "—";
+  return `$${p < 1 ? p.toPrecision(3) : p.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
 const CHAIN_LABEL: Record<string, string> = {
@@ -39,6 +46,7 @@ const CHAIN_LABEL: Record<string, string> = {
   base: "Base",
   arbitrum: "Arbitrum",
 };
+const chainName = (c: string | null) => (c ? (CHAIN_LABEL[c] ?? c) : "");
 
 /** `listings` is the server's cached snapshot (first paint + SEO); the
  * browser then refreshes straight from DexScreener every 20s. */
@@ -46,94 +54,64 @@ export function ListingsTable({ listings: initial }: { listings: Listing[] }) {
   const { data: listings, status } = usePolled(fetchFreshListings, initial, REFRESH_MS);
   const [chain, setChain] = useState<string>("all");
 
+  // Only the busiest few chains get a tab; the long tail stays under "All".
   const chains = useMemo(() => {
-    const seen = new Set(listings.map((l) => l.chain).filter((c): c is string => !!c));
-    return Array.from(seen);
+    const counts = new Map<string, number>();
+    for (const l of listings) if (l.chain) counts.set(l.chain, (counts.get(l.chain) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([c]) => c);
   }, [listings]);
 
   const filtered = chain === "all" ? listings : listings.filter((l) => l.chain === chain);
 
   return (
-    <div className="flex flex-col gap-3">
-      <LiveStatusChip status={status} source="DexScreener · every 20s" />
-      <div className="flex gap-1.5 overflow-x-auto rounded-lg bg-surface-2 p-1">
-        <button
-          onClick={() => setChain("all")}
-          className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium ${
-            chain === "all" ? "bg-surface text-ink-50 shadow-[var(--shadow-card)]" : "text-ink-400"
-          }`}
-        >
-          All Chains
-        </button>
-        {chains.map((c) => (
-          <button
-            key={c}
-            onClick={() => setChain(c)}
-            className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium ${
-              chain === c ? "bg-surface text-ink-50 shadow-[var(--shadow-card)]" : "text-ink-400"
-            }`}
-          >
-            {CHAIN_LABEL[c] ?? c}
-          </button>
-        ))}
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="no-scrollbar max-w-full overflow-x-auto">
+          <Segmented
+            ariaLabel="Chain"
+            value={chain}
+            onChange={setChain}
+            options={[{ value: "all", label: "All" }, ...chains.map((c) => ({ value: c, label: chainName(c) }))]}
+          />
+        </div>
+        <LiveStatusChip status={status} source="DexScreener · every 20s" />
       </div>
 
-      <div className="overflow-x-auto rounded-xl2 border border-line bg-surface">
-        <table className="w-full min-w-[640px] border-collapse">
-          <thead>
-            <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-500">
-              <th className="px-4 py-3 font-medium">Token</th>
-              <th className="px-4 py-3 font-medium">Chain</th>
-              <th className="px-4 py-3 font-medium">Price</th>
-              <th className="px-4 py-3 font-medium">24H Change</th>
-              <th className="px-4 py-3 font-medium">Liquidity</th>
-              <th className="px-4 py-3 font-medium">Age</th>
-              <th className="px-4 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((l) => (
-              <tr key={l.id} className="border-b border-line last:border-none hover:bg-hover">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <TokenIcon src={l.image} alt={l.symbol} size={28} />
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{l.symbol}</div>
-                      <div className="truncate text-xs text-ink-400">{l.name}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-sm text-ink-300">{l.chain ? CHAIN_LABEL[l.chain] ?? l.chain : "—"}</td>
-                <td className="px-4 py-3 text-sm tabular-nums">
-                  {l.priceUsd !== null ? `$${l.priceUsd < 1 ? l.priceUsd.toPrecision(4) : l.priceUsd.toFixed(2)}` : "—"}
-                </td>
-                <td className="px-4 py-3 text-sm tabular-nums">
-                  {l.change24hPct !== null ? (
-                    <span className={l.change24hPct >= 0 ? "text-pos" : "text-neg"}>
-                      {l.change24hPct >= 0 ? "+" : ""}
-                      {l.change24hPct.toFixed(1)}%
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm tabular-nums text-ink-300">{formatCompactUsd(l.liquidityUsd)}</td>
-                <td className="px-4 py-3 text-sm tabular-nums text-ink-300">{formatAge(l.pairCreatedAt)}</td>
-                <td className="px-4 py-3 text-right">
-                  <ExternalLinkBadge href={l.link} label="DexScreener" />
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-ink-400">
-                  No listings for this chain right now.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ul className="group-card" style={{ "--sep-inset": "68px" } as React.CSSProperties}>
+        {filtered.map((l) => {
+          const age = formatAge(l.pairCreatedAt);
+          const liquidity = formatCompactUsd(l.liquidityUsd);
+          return (
+            <li key={l.id} className="list-row flex items-center gap-3.5 px-4 py-3.5">
+              <TokenIcon src={l.image} alt={l.symbol} size={40} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[16px] font-semibold tracking-[-0.015em]">{l.symbol}</div>
+                <div className="truncate text-[13px] text-ink-400" suppressHydrationWarning>
+                  {[l.name, chainName(l.chain), age].filter(Boolean).join(" · ")}
+                </div>
+              </div>
+              <div className="hidden w-[88px] text-right sm:block">
+                {liquidity && (
+                  <>
+                    <div className="text-[15px] font-medium tabular-nums text-ink-200">{liquidity}</div>
+                    <div className="text-[12px] text-ink-500">liquidity</div>
+                  </>
+                )}
+              </div>
+              <div className="flex min-w-[112px] flex-col items-end gap-1">
+                <span className="text-[16px] font-semibold tracking-[-0.02em] tabular-nums">{formatPrice(l.priceUsd)}</span>
+                <ChangePill pct={l.change24hPct} digits={l.change24hPct !== null && Math.abs(l.change24hPct) >= 100 ? 0 : 1} />
+              </div>
+              <div className="hidden w-[92px] justify-end md:flex">
+                <ExternalLinkBadge href={l.link} label="DexScreener" />
+              </div>
+            </li>
+          );
+        })}
+        {filtered.length === 0 && (
+          <li className="px-4 py-12 text-center text-[15px] text-ink-400">No listings for this chain right now.</li>
+        )}
+      </ul>
     </div>
   );
 }

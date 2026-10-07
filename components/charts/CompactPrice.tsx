@@ -2,29 +2,34 @@
 
 import { useLiveTicker } from "@/lib/exchanges/useLiveTicker";
 import { usePriceFlash } from "@/lib/exchanges/usePriceFlash";
+import { ChangePill } from "@/components/ui/ChangePill";
 
-const FLASH_CLASS: Record<"up" | "down", string> = {
-  up: "bg-pos-soft text-pos",
-  down: "bg-neg-soft text-neg",
-};
-
-/** Compact live price for list rows (homepage Market Summary) where the
- * full LiveTicker's 3xl hero styling doesn't fit — same live data + flash
- * feedback, smaller footprint. Was previously a static CoinGecko snapshot
- * that only changed on the page's revalidation window (up to 2 min), which
- * read as "not live at all" next to the genuinely-ticking /markets page. */
-export function CompactPrice({ symbol, seedPrice }: { symbol: string; seedPrice: number | null }) {
-  const { price: livePrice } = useLiveTicker(symbol);
+/** Live price + 24h change for list rows, right-aligned: price on top, pill
+ * beneath. The digits tint on each tick (same convention as the headline
+ * ticker). Falls back to the server snapshot until the first tick arrives. */
+export function CompactPrice({
+  symbol,
+  seedPrice,
+  showChange = true,
+}: {
+  symbol: string;
+  seedPrice: number | null;
+  showChange?: boolean;
+}) {
+  const { price: livePrice, changePct24h } = useLiveTicker(symbol);
   const price = livePrice ?? seedPrice;
   const flash = usePriceFlash(price);
 
   return (
-    <span
-      className={`rounded px-1 text-sm tabular-nums transition-colors duration-300 ${
-        flash ? FLASH_CLASS[flash] : "text-ink-300"
-      }`}
-    >
-      {price !== null ? `$${price.toLocaleString(undefined, { maximumFractionDigits: price < 1 ? 6 : 2 })}` : "—"}
-    </span>
+    <div className="flex flex-col items-end gap-1">
+      <span
+        className={`text-[16px] font-semibold tracking-[-0.02em] tabular-nums transition-colors duration-500 ${
+          flash === "up" ? "text-pos" : flash === "down" ? "text-neg" : "text-ink-50"
+        }`}
+      >
+        {price !== null ? price.toLocaleString("en-US", { maximumFractionDigits: price < 1 ? 6 : 2 }) : "—"}
+      </span>
+      {showChange && <ChangePill pct={changePct24h} />}
+    </div>
   );
 }

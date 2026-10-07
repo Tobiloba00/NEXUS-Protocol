@@ -58,6 +58,7 @@ export async function fetchTensorCollections(_limit = 20): Promise<NftCollection
       floorPrice: typeof r.statsV2?.floorPrice === "number" ? r.statsV2.floorPrice / 1_000_000_000 : null,
       currency: "SOL",
       volume24h: null,
+      volume7d: null,
       link: `https://www.tensor.trade/trade/${r.slug}`,
       slug: null, // not wired to a /nft/[slug] detail page — this source is disabled anyway (see file header)
     }));

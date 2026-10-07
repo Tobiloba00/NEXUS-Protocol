@@ -18,10 +18,15 @@ type MagicEdenCollection = {
 };
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
+// The list endpoint returns collections in no useful order and includes many
+// dead ones (zero listings), so look at a fixed pool, keep the active ones,
+// and rank them by 7-day volume. 60 stats lookups per refresh stays under
+// Magic Eden's 120 requests/minute/IP limit.
+const POOL_SIZE = 60;
 
-export async function fetchMagicEdenCollections(limit = 60): Promise<NftCollection[]> {
+export async function fetchMagicEdenCollections(limit = 40): Promise<NftCollection[]> {
   try {
-    const res = await fetch(`${BASE}/collections?offset=0&limit=${limit}`, {
+    const res = await fetch(`${BASE}/collections?offset=0&limit=${POOL_SIZE}`, {
       headers: { accept: "application/json" },
     });
     if (!res.ok) {
@@ -30,7 +35,7 @@ export async function fetchMagicEdenCollections(limit = 60): Promise<NftCollecti
     }
     const rows: MagicEdenCollection[] = await res.json();
 
-    return rows
+    const collections: NftCollection[] = rows
       .filter((r) => r.name && r.image)
       .map((r) => ({
         id: r.name.trim().toLowerCase(),
@@ -45,9 +50,28 @@ export async function fetchMagicEdenCollections(limit = 60): Promise<NftCollecti
         // (the legacy repo's `* 0.1` heuristic, index.html:1349, is not
         // ported forward — a wrong-looking real number is worse than none).
         volume24h: null,
+        volume7d: null,
         link: `https://magiceden.io/marketplace/${r.symbol}`,
         slug: r.symbol,
       }));
+
+    // The list endpoint carries no floor or volume, so fill both in from each
+    // collection's stats endpoint, in batches of 10.
+    for (let i = 0; i < collections.length; i += 10) {
+      await Promise.all(
+        collections.slice(i, i + 10).map(async (c) => {
+          if (!c.slug) return;
+          const stats = await fetchCollectionStats(c.slug);
+          c.floorPrice = stats.floorPrice;
+          c.volume7d = stats.volume7d;
+        })
+      );
+    }
+    // Active collections only (a floor means at least one live listing).
+    return collections
+      .filter((c) => c.floorPrice !== null && c.floorPrice > 0)
+      .sort((a, b) => (b.volume7d ?? 0) - (a.volume7d ?? 0))
+      .slice(0, limit);
   } catch (err) {
     console.warn("[magiceden] collections fetch failed", err);
     return [];
