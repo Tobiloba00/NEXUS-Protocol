@@ -3,12 +3,14 @@ import Link from "next/link";
 import { fetchOhlc } from "@/lib/data-sources/coingecko";
 import { getMarkets, getNewListings } from "@/lib/data/cache";
 import { fetchGlobalStats, fetchFearGreed } from "@/lib/data-sources/global-stats";
+import { fetchCrowdLadder } from "@/lib/data-sources/polymarket";
 import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
 import { Page, PageHeader } from "@/components/layout/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ChangePill } from "@/components/ui/ChangePill";
 import { TopMovers } from "@/components/dashboard/TopMovers";
 import { HeroChart } from "@/components/charts/HeroChart";
+import { CrowdLadder } from "@/components/crowd/CrowdLadder";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { CompactPrice } from "@/components/charts/CompactPrice";
 import { TokenIcon } from "@/components/ui/TokenIcon";
@@ -55,12 +57,13 @@ function Pulse({
 }
 
 export default async function Home() {
-  const [{ data: markets }, ohlc, globalStats, fearGreed, { data: listings }] = await Promise.all([
+  const [{ data: markets }, ohlc, globalStats, fearGreed, { data: listings }, ladder] = await Promise.all([
     getMarkets(100),
     fetchOhlc("bitcoin", 1),
     fetchGlobalStats(),
     fetchFearGreed(),
     getNewListings(8),
+    fetchCrowdLadder("Bitcoin"),
   ]);
 
   const btc = markets.find((m) => m.id === "bitcoin");
@@ -112,6 +115,10 @@ export default async function Home() {
           <HeroChart pairSlug="btc-usdt" seed={seed} />
         </div>
       </section>
+
+      <div className="rise rise-2">
+        <CrowdLadder initial={ladder} symbol="BTCUSDT" base="BTC" />
+      </div>
 
       <div className="rise rise-2 grid grid-cols-1 gap-9 lg:grid-cols-2 lg:gap-8">
         <TopMovers markets={markets} />
