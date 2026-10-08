@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Newspaper, Sparkles } from "lucide-react";
-import { OPEN_ASK_EVENT } from "@/components/ask/AskLauncher";
+
 import { Logo } from "./Logo";
 import { SiteSearch } from "./SiteSearch";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { NAV_ITEMS, isNavActive } from "@/lib/nav/nav-items";
+import { NAV_ITEMS, TOPBAR_LINKS, isNavActive } from "@/lib/nav/nav-items";
 
 /** One translucent bar for every screen size. On desktop it carries the
  * navigation as plain text links (the active one is simply darker — no
@@ -43,27 +42,23 @@ export function TopNav() {
           <div className="hidden w-[220px] md:block">
             <SiteSearch />
           </div>
-          <Link
-            href="/news"
-            className="press flex h-11 w-11 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
-            aria-label="News"
-          >
-            <Newspaper className="h-[19px] w-[19px]" strokeWidth={1.75} />
-          </Link>
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent(OPEN_ASK_EVENT))}
-            className="press flex h-11 w-11 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
-            aria-label="Ask Nexus, the AI assistant"
-          >
-            <Sparkles className="h-[19px] w-[19px]" strokeWidth={1.75} />
-          </button>
-          <Link
-            href="/alerts"
-            className="press flex h-11 w-11 items-center justify-center rounded-full text-ink-300 transition-colors hover:bg-hover hover:text-ink-50 lg:hidden"
-            aria-label="Alerts"
-          >
-            <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
-          </Link>
+          {TOPBAR_LINKS.map((item) => {
+            const Icon = item.icon;
+            const active = isNavActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-label={item.label}
+                aria-current={active ? "page" : undefined}
+                className={`press flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-hover lg:hidden ${
+                  active ? "text-accent" : "text-ink-300 hover:text-ink-50"
+                }`}
+              >
+                <Icon className="h-[19px] w-[19px]" strokeWidth={active ? 2.1 : 1.75} />
+              </Link>
+            );
+          })}
           <ThemeToggle />
         </div>
       </div>

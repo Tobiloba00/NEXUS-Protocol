@@ -3,20 +3,23 @@ import { House, ChartNoAxesCombined, Sparkles, Image, Vote, Bell, Newspaper } fr
 
 export type NavItem = { label: string; href: string; icon: LucideIcon };
 
-/** Single source of truth for the top nav and the mobile tab bar. The AI
- * assistant is not a nav item: it lives in the floating button (and /ask). */
-export const NAV_ITEMS: NavItem[] = [
-  { label: "Home", href: "/", icon: House },
-  { label: "Markets", href: "/markets", icon: ChartNoAxesCombined },
-  { label: "New Coins", href: "/new-listings", icon: Sparkles },
-  { label: "NFTs", href: "/nft", icon: Image },
-  { label: "Predictions", href: "/predictions", icon: Vote },
-  { label: "News", href: "/news", icon: Newspaper },
-  { label: "Alerts", href: "/alerts", icon: Bell },
-];
+const HOME: NavItem = { label: "Home", href: "/", icon: House };
+const MARKETS: NavItem = { label: "Markets", href: "/markets", icon: ChartNoAxesCombined };
+const NEW_COINS: NavItem = { label: "New Coins", href: "/new-listings", icon: Sparkles };
+const NFTS: NavItem = { label: "NFTs", href: "/nft", icon: Image };
+const PREDICTIONS: NavItem = { label: "Predictions", href: "/predictions", icon: Vote };
+const NEWS: NavItem = { label: "News", href: "/news", icon: Newspaper };
+const ALERTS: NavItem = { label: "Alerts", href: "/alerts", icon: Bell };
 
-/** Five slots, like an iOS tab bar. News, Alerts and Ask live in the mobile top bar. */
-export const MOBILE_TABS: NavItem[] = NAV_ITEMS.slice(0, 5);
+/** Desktop top nav. The AI assistant is not a link: it's the orb. */
+export const NAV_ITEMS: NavItem[] = [HOME, MARKETS, NEW_COINS, NFTS, PREDICTIONS, NEWS, ALERTS];
+
+/** Phone/tablet dock: two tabs, the AI orb in the middle, two tabs. */
+export const DOCK_LEFT: NavItem[] = [HOME, MARKETS];
+export const DOCK_RIGHT: NavItem[] = [NEW_COINS, NFTS];
+
+/** The rest of the destinations live in the phone/tablet top bar. */
+export const TOPBAR_LINKS: NavItem[] = [PREDICTIONS, NEWS, ALERTS];
 
 export function isNavActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";

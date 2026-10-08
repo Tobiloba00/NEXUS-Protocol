@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Sparkles, X } from "lucide-react";
-import { AskChat, type IncomingQuestion } from "./AskChat";
+import dynamic from "next/dynamic";
+import { X } from "lucide-react";
+import { NexusOrb } from "@/components/ui/NexusOrb";
+import type { IncomingQuestion } from "./AskChat";
+
+// The chat (and everything it pulls in) only downloads the first time someone
+// opens the assistant, so it adds nothing to the page's initial JavaScript.
+const AskChat = dynamic(() => import("./AskChat").then((m) => m.AskChat), {
+  ssr: false,
+  loading: () => <div className="flex h-full items-center justify-center text-[14px] text-ink-400">Loading…</div>,
+});
 
 /** Any component can open the assistant with this (optionally with a question
  * to ask straight away); keeps the launcher decoupled from the rest of the UI. */
@@ -46,6 +55,7 @@ function useKeyboardInset(active: boolean) {
  */
 export function AskLauncher() {
   const [open, setOpen] = useState(false);
+  const [everOpened, setEverOpened] = useState(false);
   const [incoming, setIncoming] = useState<IncomingQuestion | null>(null);
   const pathname = usePathname();
   const onAskPage = pathname === "/ask";
@@ -65,6 +75,7 @@ export function AskLauncher() {
   useEffect(() => {
     const openIt = (e: Event) => {
       setOpen(true);
+      setEverOpened(true);
       const question = (e as CustomEvent<OpenAskDetail>).detail?.question;
       if (question) setIncoming({ id: Date.now(), q: question });
     };
@@ -97,14 +108,12 @@ export function AskLauncher() {
         aria-hidden={!open}
         style={keyboardInset ? { bottom: keyboardInset } : undefined}
         className={`fixed z-50 flex-col overflow-hidden bg-surface shadow-[var(--shadow-lg)] ${
-          open ? "flex" : "hidden"
+          open ? "sheet-in flex" : "hidden"
         } inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+56px)] rounded-t-[26px] sm:inset-x-auto sm:bottom-24 sm:right-6 sm:top-auto sm:h-[min(640px,calc(100vh-8rem))] sm:w-[400px] sm:rounded-[26px]`}
       >
         <header className="flex shrink-0 items-center justify-between px-5 pb-2 pt-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-white">
-              <Sparkles className="h-4 w-4" strokeWidth={2} />
-            </span>
+            <NexusOrb size={34} />
             <div className="leading-tight">
               <div className="text-[16px] font-semibold tracking-[-0.015em]">Ask Nexus</div>
               <div className="text-[12px] text-ink-400">AI · live data · not advice</div>
@@ -119,18 +128,21 @@ export function AskLauncher() {
           </button>
         </header>
         <div className="min-h-0 flex-1 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-1">
-          <AskChat variant="popup" incoming={incoming} />
+          {everOpened && <AskChat variant="popup" incoming={incoming} />}
         </div>
       </section>
 
       {!open && (
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true);
+            setEverOpened(true);
+          }}
           aria-label="Ask Nexus, the AI assistant"
-          className="press fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-accent pl-4 pr-5 text-[15px] font-semibold text-white shadow-[0_8px_28px_-6px_color-mix(in_srgb,var(--accent)_70%,transparent)] sm:right-6 lg:bottom-6"
+          title="Ask Nexus"
+          className="press group fixed bottom-6 right-6 z-40 hidden lg:block"
         >
-          <Sparkles className="h-[18px] w-[18px]" strokeWidth={2.2} />
-          Ask
+          <NexusOrb size={60} className="transition-transform duration-300 group-hover:scale-110" />
         </button>
       )}
     </>

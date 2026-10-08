@@ -91,6 +91,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
+        {/* Open connections to the image hosts early so icons start downloading sooner. */}
+        <link rel="preconnect" href="https://coin-images.coingecko.com" crossOrigin="" />
+        <link rel="preconnect" href="https://assets.coingecko.com" crossOrigin="" />
+        <link rel="preconnect" href="https://cdn.dexscreener.com" crossOrigin="" />
+        <link rel="preconnect" href="https://img-cdn.magiceden.dev" crossOrigin="" />
         <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
       </head>
       <body className="min-h-full bg-bg font-sans text-ink-50">
@@ -98,7 +103,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <TopNav />
           <div>{children}</div>
           <SiteFooter />
-          <div className="h-[calc(76px+env(safe-area-inset-bottom))] lg:hidden" aria-hidden />
+          <div className="h-[calc(96px+env(safe-area-inset-bottom))] lg:hidden" aria-hidden />
           <MobileTabBar />
           <AskLauncher />
           <TermsGate />

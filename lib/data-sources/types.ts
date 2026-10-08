@@ -31,6 +31,8 @@ export type Listing = {
   pairCreatedAt: number | null; // epoch ms — dexscreener rows only
   link: string;
   signals?: ListingSignals; // dexscreener rows only; absent on older cached rows
+  change7dPct?: number | null; // coingecko rows
+  spark?: number[]; // coingecko rows: ~28 evenly spaced prices over 7 days, oldest first
 };
 
 export type NftCollection = {
