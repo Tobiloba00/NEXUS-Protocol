@@ -40,7 +40,12 @@ export async function getLatestBrief(): Promise<Brief | null> {
   }
 }
 
-export type EnsureResult = { status: "exists" | "generated" | "too-early" | "unavailable"; detail?: string };
+export type EnsureResult = {
+  status: "exists" | "generated" | "too-early" | "unavailable";
+  detail?: string;
+  /** Present only when a brand-new brief was just generated. */
+  brief?: { day: string; body: string };
+};
 
 export async function ensureTodaysBrief(now = new Date()): Promise<EnsureResult> {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return { status: "unavailable", detail: "no database" };
@@ -62,7 +67,7 @@ export async function ensureTodaysBrief(now = new Date()): Promise<EnsureResult>
     if (body.length < 200 || body.length > 1400) return { status: "unavailable", detail: `unusable length ${body.length}` };
     const { error } = await supabase.from("ai_briefs").upsert({ day, body, model });
     if (error) return { status: "unavailable", detail: error.message };
-    return { status: "generated" };
+    return { status: "generated", brief: { day, body } };
   } catch (err) {
     return { status: "unavailable", detail: err instanceof Error ? err.message : String(err) };
   }

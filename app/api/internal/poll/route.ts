@@ -4,9 +4,10 @@ import { fetchNewTokenProfiles } from "@/lib/data-sources/dexscreener";
 import { fetchAllNftCollections } from "@/lib/data-sources/nft-aggregate";
 import { fetchActiveMarkets } from "@/lib/data-sources/polymarket";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { evaluatePriceAlerts } from "@/lib/alerts/evaluate";
+import { checkPriceAlerts, type AlertRunResult } from "@/lib/alerts/evaluate";
+import { sendBriefDigest } from "@/lib/telegram/digest";
 import { ensureTodaysBrief } from "@/lib/ai/brief";
-import type { Listing } from "@/lib/data-sources/types";
+
 
 /**
  * The one route a scheduler calls (.github/workflows/poller.yml). Only this
@@ -24,7 +25,7 @@ import type { Listing } from "@/lib/data-sources/types";
  * logged to poll_runs for the admin health view.
  */
 
-const GROUPS = ["markets", "listings", "nft", "predictions", "brief"] as const;
+const GROUPS = ["alerts", "markets", "listings", "nft", "predictions", "brief"] as const;
 type Group = (typeof GROUPS)[number];
 
 type GroupResult = {
@@ -38,17 +39,18 @@ type GroupResult = {
 // (a cache table has no inherent row order).
 const ranked = <T extends object>(rows: T[]) => rows.map((r, i) => ({ ...r, rank: i }));
 
-export async function POST(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  const expected = process.env.POLL_SECRET;
+export const maxDuration = 60; // seconds — several source groups can run in one call
 
-  if (!expected) {
-    return NextResponse.json(
-      { ok: false, error: "POLL_SECRET is not configured on the server" },
-      { status: 500 }
-    );
+export async function POST(request: NextRequest) {
+  // Two accepted secrets: POLL_SECRET (GitHub Actions backup clock) and
+  // CRON_SECRET (the database scheduler, the primary clock).
+  const auth = request.headers.get("authorization");
+  const secrets = [process.env.POLL_SECRET, process.env.CRON_SECRET].filter((s): s is string => !!s);
+
+  if (!secrets.length) {
+    return NextResponse.json({ ok: false, error: "No POLL_SECRET or CRON_SECRET is configured on the server" }, { status: 500 });
   }
-  if (auth !== `Bearer ${expected}`) {
+  if (!auth || !secrets.some((s) => auth === `Bearer ${s}`)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
   const supabase = hasDb ? getSupabaseServerClient() : null;
   const fetchedAt = new Date().toISOString();
 
-  let marketsForAlerts: Listing[] = [];
+  let alertRun: AlertRunResult | null = null;
 
   async function run<T extends object>(
     fetcher: () => Promise<T[]>,
@@ -103,9 +105,28 @@ export async function POST(request: NextRequest) {
 
   const tasks: Record<Group, () => Promise<GroupResult & { data: unknown[] }>> = {
     // Once per UTC day (a no-op on every other run): the AI-written home-page brief.
+    // Every couple of minutes: compare live prices to people's alert levels.
+    alerts: async () => {
+      const started = Date.now();
+      try {
+        alertRun = await checkPriceAlerts();
+        return { status: "ok", rows: alertRun.fired, ms: Date.now() - started, error: null, data: [] };
+      } catch (err) {
+        return { status: "error", rows: 0, ms: Date.now() - started, error: err instanceof Error ? err.message : String(err), data: [] };
+      }
+    },
     brief: async () => {
       const started = Date.now();
       const r = await ensureTodaysBrief();
+      // A brand-new brief also goes out to Telegram subscribers (once a day).
+      if (r.status === "generated" && r.brief) {
+        try {
+          const n = await sendBriefDigest(r.brief.day, r.brief.body);
+          console.log(`[poll] brief digest sent to ${n} subscriber(s)`);
+        } catch (err) {
+          console.warn("[poll] brief digest failed", err);
+        }
+      }
       const ok = r.status !== "unavailable";
       return {
         status: ok ? "ok" : "empty",
@@ -130,7 +151,6 @@ export async function POST(request: NextRequest) {
             }))
           )
       );
-      marketsForAlerts = r.data;
       return r;
     },
     listings: () =>
@@ -188,16 +208,8 @@ export async function POST(request: NextRequest) {
   );
   const results = Object.fromEntries(settled) as Record<Group, GroupResult>;
 
-  let alerts: { evaluated: number; fired: number } | "skipped" = "skipped";
+  const alerts: AlertRunResult | "skipped" = alertRun ?? "skipped";
   if (supabase) {
-    // Alerts need fresh prices, so they ride along with the markets group.
-    if (results.markets?.status === "ok") {
-      try {
-        alerts = await evaluatePriceAlerts(marketsForAlerts);
-      } catch (err) {
-        console.error("[poll] alert evaluation failed", err);
-      }
-    }
 
     // Health log for the admin panel. Failure to log (e.g. migration 0002
     // not applied yet) must never fail the poll itself.

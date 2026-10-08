@@ -340,6 +340,90 @@ button.list-row:hover {
   }
 }
 
+/* ---------- AI orb (components/ui/NexusOrb.tsx) ---------- */
+.nexus-orb {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  isolation: isolate;
+  background: #1d6bff;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.55),
+    inset 0 -7px 14px rgba(0, 20, 90, 0.38),
+    0 10px 26px -8px rgba(30, 100, 255, 0.75);
+}
+.nexus-orb__aurora {
+  position: absolute;
+  inset: -35%;
+  background:
+    radial-gradient(38% 38% at 28% 30%, #8be9ff 0%, transparent 70%),
+    radial-gradient(42% 42% at 74% 28%, #b79cff 0%, transparent 72%),
+    radial-gradient(48% 48% at 52% 80%, #22d3ee 0%, transparent 70%),
+    radial-gradient(40% 40% at 85% 75%, #5e5ce6 0%, transparent 70%);
+  filter: blur(5px);
+  animation: orb-drift 9s ease-in-out infinite alternate;
+}
+.nexus-orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.65), transparent 42%);
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+.nexus-orb__spark {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 1px 4px rgba(0, 30, 120, 0.45));
+  animation: orb-twinkle 3.2s ease-in-out infinite;
+}
+@keyframes orb-drift {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  100% {
+    transform: rotate(200deg) scale(1.1);
+  }
+}
+@keyframes orb-twinkle {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+  50% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+}
+
+/* Bottom sheets glide up instead of popping in. */
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sheet-in {
+  animation: sheet-in 0.38s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nexus-orb__aurora,
+  .nexus-orb__spark,
+  .sheet-in {
+    animation: none;
+  }
+}
+
 /* Horizontal carousels hide their scrollbar like iOS does. */
 .no-scrollbar {
   scrollbar-width: none;

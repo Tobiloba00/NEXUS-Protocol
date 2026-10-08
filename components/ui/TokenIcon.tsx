@@ -1,3 +1,5 @@
+import { thumb } from "@/lib/ui/thumb";
+
 /** Real icon when the source gave us one; otherwise a monogram fallback —
  * never a broken-image icon or an empty gap where a logo should be.
  *
@@ -24,8 +26,12 @@ export function TokenIcon({
     return (
       // eslint-disable-next-line @next/next/no-img-element -- sources span many CDNs, not worth a remotePatterns allowlist for a v1 list page
       <img
-        src={src}
         alt=""
+        src={className ? src : thumb(src, size)}
+        loading="lazy"
+        decoding="async"
+        width={className ? undefined : size}
+        height={className ? undefined : size}
         className={`${className ? "" : "shrink-0"} ${shape} bg-surface-2 object-cover ${className ?? ""}`}
         style={sizing}
       />

@@ -8,6 +8,7 @@ import { usePolled } from "@/lib/live/usePolled";
 import type { NftCollection } from "@/lib/data-sources/types";
 
 const REFRESH_MS = 60000;
+const PAGE = 24;
 
 // Magic Eden has no CORS headers, so the browser refreshes via our own
 // CDN-cached route (app/api/live/nft/route.ts) instead of calling it directly.
@@ -20,7 +21,7 @@ async function fetchFreshCollections(): Promise<NftCollection[]> {
 
 const CHAIN_LABEL: Record<string, string> = { solana: "Solana", ethereum: "Ethereum", polygon: "Polygon" };
 
-function Tile({ c }: { c: NftCollection }) {
+function Tile({ c, priority }: { c: NftCollection; priority: boolean }) {
   const [broken, setBroken] = useState(false);
   const body = (
     <>
@@ -30,7 +31,9 @@ function Tile({ c }: { c: NftCollection }) {
           <img
             src={c.image}
             alt=""
-            loading="lazy"
+            loading={priority ? "eager" : "lazy"}
+            fetchPriority={priority ? "high" : "auto"}
+            decoding="async"
             onError={() => setBroken(true)}
             className="aspect-square w-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] group-hover:scale-[1.04]"
           />
@@ -53,6 +56,11 @@ function Tile({ c }: { c: NftCollection }) {
             "Floor unavailable"
           )}
         </div>
+        {c.volume7d !== null && c.volume7d > 0 && (
+          <div className="mt-0.5 text-[12.5px] text-ink-400">
+            <span className="tabular-nums">{c.volume7d.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span> {c.currency} volume · 7d
+          </div>
+        )}
       </div>
     </>
   );
@@ -71,6 +79,7 @@ function Tile({ c }: { c: NftCollection }) {
 export function NftGrid({ collections: initial }: { collections: NftCollection[] }) {
   const { data: collections, status } = usePolled(fetchFreshCollections, initial, REFRESH_MS);
   const [chain, setChain] = useState("all");
+  const [visible, setVisible] = useState(PAGE);
 
   const chains = useMemo(() => Array.from(new Set(collections.map((c) => c.chain))), [collections]);
   const filtered = chain === "all" ? collections : collections.filter((c) => c.chain === chain);
@@ -92,13 +101,18 @@ export function NftGrid({ collections: initial }: { collections: NftCollection[]
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4">
-        {filtered.map((c) => (
-          <Tile key={c.id} c={c} />
+        {filtered.slice(0, visible).map((c, i) => (
+          <Tile key={c.id} c={c} priority={i < 4} />
         ))}
         {filtered.length === 0 && (
           <p className="col-span-full py-12 text-center text-[15px] text-ink-400">No collections right now.</p>
         )}
       </div>
+      {visible < filtered.length && (
+        <button onClick={() => setVisible((v) => v + PAGE)} className="press h-[50px] rounded-[14px] bg-surface text-[15px] font-medium text-accent">
+          Show more collections ({filtered.length - visible} left)
+        </button>
+      )}
     </div>
   );
 }

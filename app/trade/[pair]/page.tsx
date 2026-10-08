@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { getPairBySlug, LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
+import { LAUNCH_PAIRS } from "@/lib/exchanges/pairs";
+import { resolvePair } from "@/lib/exchanges/resolve-pair";
 import { fetchOhlc } from "@/lib/data-sources/coingecko";
 import { getMarkets } from "@/lib/data/cache";
 import { fetchCrowdLadder } from "@/lib/data-sources/polymarket";
 import { CrowdLadder } from "@/components/crowd/CrowdLadder";
 import { Page } from "@/components/layout/Page";
-import { PriceChart, type SeedCandle } from "@/components/charts/PriceChart";
+import { PriceChartLazy } from "@/components/charts/PriceChartLazy";
+import type { SeedCandle } from "@/components/charts/PriceChart";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { TokenIcon } from "@/components/ui/TokenIcon";
 import { AiInsightButton } from "@/components/ask/AiInsightButton";
@@ -34,7 +36,7 @@ export async function generateMetadata({
   params: Promise<{ pair: string }>;
 }): Promise<Metadata> {
   const { pair } = await params;
-  const config = getPairBySlug(pair);
+  const config = await resolvePair(pair);
   if (!config) return {};
   return {
     title: `${config.base}/${config.quote} Live Price & Chart`,
@@ -44,7 +46,7 @@ export async function generateMetadata({
 
 export default async function TradePage({ params }: { params: Promise<{ pair: string }> }) {
   const { pair } = await params;
-  const config = getPairBySlug(pair);
+  const config = await resolvePair(pair);
   if (!config) notFound();
 
   // Prediction-market odds exist for a few majors; skip the fetch for the rest.
@@ -97,7 +99,7 @@ export default async function TradePage({ params }: { params: Promise<{ pair: st
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_330px]">
-        <PriceChart key={config.binanceSymbol} symbol={config.binanceSymbol} seed={seed} />
+        <PriceChartLazy key={config.binanceSymbol} symbol={config.binanceSymbol} seed={seed} />
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-1">
           <OrderBook key={`${config.binanceSymbol}-book`} symbol={config.binanceSymbol} />
           <TradeTape key={`${config.binanceSymbol}-tape`} symbol={config.binanceSymbol} />

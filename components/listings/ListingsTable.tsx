@@ -144,8 +144,8 @@ export function ListingsTable({ listings: initial }: { listings: Listing[] }) {
               >
                 <TokenIcon src={l.image} alt={l.symbol} size={40} />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-[16px] font-semibold tracking-[-0.015em]">{l.symbol}</span>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="min-w-0 truncate text-[16px] font-semibold tracking-[-0.015em]">{l.symbol}</span>
                     {risk && <RiskBadge level={risk.level} />}
                   </div>
                   <div className="truncate text-[13px] text-ink-400" suppressHydrationWarning>

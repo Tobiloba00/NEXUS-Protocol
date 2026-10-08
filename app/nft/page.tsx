@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NftPage() {
-  const { data: collections } = await getNftCollections(40);
+  const { data: collections } = await getNftCollections(100);
 
   return (
     <Page>
