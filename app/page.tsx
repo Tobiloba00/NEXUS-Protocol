@@ -11,7 +11,8 @@ import { Page, PageHeader } from "@/components/layout/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ChangePill } from "@/components/ui/ChangePill";
 import { TopMovers } from "@/components/dashboard/TopMovers";
-import { HeroChart } from "@/components/charts/HeroChart";
+import { HeroChartLazy } from "@/components/charts/HeroChartLazy";
+import { slimCoin } from "@/lib/data/slim";
 import { CrowdLadder } from "@/components/crowd/CrowdLadder";
 import { LiveTicker } from "@/components/charts/LiveTicker";
 import { CompactPrice } from "@/components/charts/CompactPrice";
@@ -115,7 +116,7 @@ export default async function Home() {
           <LiveTicker symbol="BTCUSDT" base="BTC" quote="USDT" seedPrice={btc?.priceUsd ?? null} />
         </div>
         <div className="mt-6">
-          <HeroChart pairSlug="btc-usdt" seed={seed} />
+          <HeroChartLazy pairSlug="btc-usdt" seed={seed} />
         </div>
       </section>
 
@@ -126,7 +127,7 @@ export default async function Home() {
       </div>
 
       <div className="rise rise-2 grid grid-cols-1 gap-9 md:grid-cols-2 md:items-start md:gap-6 lg:gap-8">
-        <TopMovers markets={markets} />
+        <TopMovers markets={markets.map(slimCoin)} />
 
         <section>
           <SectionHeader title="Watchlist" href="/markets" hrefLabel="See all" />

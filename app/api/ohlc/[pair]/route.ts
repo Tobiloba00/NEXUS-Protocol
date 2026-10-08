@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchOhlc } from "@/lib/data-sources/coingecko";
-import { getPairBySlug } from "@/lib/exchanges/pairs";
+import { resolvePair } from "@/lib/exchanges/resolve-pair";
 
 const RANGE_TO_DAYS: Record<string, number> = { "1d": 1, "1w": 7, "1m": 30, "1y": 365 };
 
@@ -16,7 +16,7 @@ export async function GET(
   ctx: RouteContext<"/api/ohlc/[pair]">
 ) {
   const { pair: slug } = await ctx.params;
-  const pair = getPairBySlug(slug);
+  const pair = await resolvePair(slug);
   if (!pair) return NextResponse.json({ ok: false, error: "unknown pair" }, { status: 404 });
 
   const range = new URL(request.url).searchParams.get("range") ?? "1d";

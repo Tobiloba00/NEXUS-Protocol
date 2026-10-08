@@ -8,6 +8,7 @@ const HELP_TEXT = `Commands:
 /setalert SYMBOL above|below PRICE — e.g. /setalert BTC above 70000
 /myalerts — list your active alerts
 /delete ID — remove one (ID from /myalerts)
+/digest off — stop the daily NEXUS brief (/digest on to resume)
 
 Supported symbols: ${SUPPORTED_SYMBOLS}`;
 
@@ -109,6 +110,20 @@ export async function POST(request: NextRequest) {
         .join("\n\n");
       await sendTelegramMessage(chatId, `Active alerts:\n\n${lines}\n\nUse /delete <id> to remove one.`);
     }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (text.startsWith("/digest")) {
+    const arg = (text.split(/\s+/)[1] ?? "").toLowerCase();
+    if (arg !== "on" && arg !== "off") {
+      await sendTelegramMessage(chatId, "Use /digest on or /digest off to control the daily NEXUS brief.");
+      return NextResponse.json({ ok: true });
+    }
+    await supabase.from("telegram_subscribers").update({ digest_enabled: arg === "on" }).eq("chat_id", chatId);
+    await sendTelegramMessage(
+      chatId,
+      arg === "on" ? "Daily brief is on. You'll get one message a day." : "Daily brief is off. Price alerts still work. /digest on to resume."
+    );
     return NextResponse.json({ ok: true });
   }
 

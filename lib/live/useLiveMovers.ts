@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { binanceWs, type BinanceTicker } from "@/lib/exchanges/binance-ws";
 import type { LiveStatus } from "@/components/status/LiveStatusChip";
-import type { Listing } from "@/lib/data-sources/types";
+import type { SlimCoin } from "@/lib/data/slim";
 
 const FLUSH_MS = 2000; // batch ticks so the list re-ranks calmly instead of every message
 const GIVE_UP_MS = 10000; // no tick by then = feed blocked/unreachable → say "delayed"
@@ -15,7 +15,7 @@ const GIVE_UP_MS = 10000; // no tick by then = feed blocked/unreachable → say 
  * doesn't list keep their snapshot values. If the socket never delivers
  * (blocked network), the snapshot stays and status says "delayed".
  */
-export function useLiveMovers(markets: Listing[], count = 5) {
+export function useLiveMovers(markets: SlimCoin[], count = 5) {
   const [live, setLive] = useState<Map<string, BinanceTicker>>(new Map());
   const [gaveUp, setGaveUp] = useState(false);
   const latest = useRef(new Map<string, BinanceTicker>());
@@ -48,7 +48,7 @@ export function useLiveMovers(markets: Listing[], count = 5) {
     });
     // Pegged stablecoins aren't "movers": a price pinned near $1 that barely
     // moves is filtered out (a depegging coin has a big change, so it stays).
-    const isStable = (m: Listing) =>
+    const isStable = (m: SlimCoin) =>
       m.priceUsd !== null && m.priceUsd > 0.95 && m.priceUsd < 1.05 && Math.abs(m.change24hPct ?? 0) < 1;
     const withChange = merged.filter((m) => m.change24hPct !== null && !isStable(m));
     // A "gainer" has to have actually gained (and a "loser" lost) — on a red

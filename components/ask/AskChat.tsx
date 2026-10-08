@@ -102,7 +102,7 @@ export function AskChat({ variant = "page", incoming = null }: { variant?: "page
       className={
         popup
           ? "flex shrink-0 items-center gap-2 rounded-full bg-surface-2 p-1.5 pl-4"
-          : "glass sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-10 flex items-center gap-2 rounded-full border border-line p-1.5 pl-5 lg:bottom-6"
+          : "glass sticky bottom-[calc(104px+env(safe-area-inset-bottom))] z-10 flex items-center gap-2 rounded-full border border-line p-1.5 pl-5 lg:bottom-6"
       }
     >
       <input

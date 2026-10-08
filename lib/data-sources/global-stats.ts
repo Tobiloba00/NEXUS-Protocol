@@ -21,9 +21,15 @@ export async function fetchGlobalStats(): Promise<GlobalStats> {
     if (!res.ok) return { totalMarketCapUsd: null, totalVolumeUsd: null, btcDominancePct: null, marketCapChangePct24h: null };
     const json = await res.json();
     const d = json.data;
+    const cap: number | null = d.total_market_cap?.usd ?? null;
+    let volume: number | null = d.total_volume?.usd ?? null;
+    // Sanity check: the market's 24h volume is a few percent of its total value,
+    // never more than all of it. CoinGecko's /global has returned garbage here
+    // before (a quadrillion-dollar "volume"); show "—" rather than publish it.
+    if (volume !== null && cap !== null && volume > cap) volume = null;
     return {
-      totalMarketCapUsd: d.total_market_cap?.usd ?? null,
-      totalVolumeUsd: d.total_volume?.usd ?? null,
+      totalMarketCapUsd: cap,
+      totalVolumeUsd: volume,
       btcDominancePct: d.market_cap_percentage?.btc ?? null,
       marketCapChangePct24h: d.market_cap_change_percentage_24h_usd ?? null,
     };

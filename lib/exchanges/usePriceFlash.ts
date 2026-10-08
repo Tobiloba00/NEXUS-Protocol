@@ -23,7 +23,9 @@ export function usePriceFlash(price: number | null) {
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
 
   if (price !== null && price !== prevPrice) {
-    if (prevPrice !== null) setFlash(price > prevPrice ? "up" : "down");
+    // Flash genuine ticks only. A big jump (e.g. the first live price replacing
+    // a 15-minute-old snapshot) would light up a whole list at once.
+    if (prevPrice !== null && Math.abs(price - prevPrice) <= prevPrice * 0.005) setFlash(price > prevPrice ? "up" : "down");
     setPrevPrice(price);
   }
 

@@ -50,7 +50,7 @@ export default async function CollectionDetailPage({
   const { slug } = await params;
   const [stats, listings, activity] = await Promise.all([
     fetchCollectionStats(slug),
-    fetchCollectionListings(slug, 24),
+    fetchCollectionListings(slug, 40),
     fetchCollectionActivity(slug, 12),
   ]);
 

@@ -30,8 +30,8 @@ jobs:
         run: |
           case "$SCHEDULE" in
             "*/15 * * * *") GROUPS_PARAM="markets,nft,brief" ;;
-            "*/5 * * * *")  GROUPS_PARAM="listings,predictions" ;;
-            *)              GROUPS_PARAM="markets,listings,nft,predictions,brief" ;;
+            "*/5 * * * *")  GROUPS_PARAM="alerts,listings,predictions" ;;
+            *)              GROUPS_PARAM="alerts,markets,listings,nft,predictions,brief" ;;
           esac
           curl --fail --silent --show-error --max-time 55 \
             -X POST "${SITE_URL}/api/internal/poll?groups=${GROUPS_PARAM}" \

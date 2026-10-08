@@ -23,10 +23,19 @@ function headers(): Record<string, string> {
   return key ? { accept: "application/json", "x-cg-demo-api-key": key } : { accept: "application/json" };
 }
 
+/** Evenly pick `n` points (keeps the last one) so a 168-point series becomes a light sparkline. */
+function downsample(series: number[] | undefined, n: number): number[] | undefined {
+  if (!series || series.length < 2) return undefined;
+  if (series.length <= n) return series.map((v) => Number(v.toPrecision(6)));
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) out.push(Number(series[Math.round((i * (series.length - 1)) / (n - 1))].toPrecision(6)));
+  return out;
+}
+
 export async function fetchTopMarkets(perPage = 100): Promise<Listing[]> {
   try {
     const res = await fetch(
-      `${BASE}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=1&sparkline=false&price_change_percentage=24h`,
+      `${BASE}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${perPage}&page=1&sparkline=true&price_change_percentage=24h,7d`,
       { headers: headers(), cache: "no-store" }
     );
     if (!res.ok) {
@@ -40,6 +49,8 @@ export async function fetchTopMarkets(perPage = 100): Promise<Listing[]> {
       image?: string;
       current_price: number | null;
       price_change_percentage_24h: number | null;
+      price_change_percentage_7d_in_currency?: number | null;
+      sparkline_in_7d?: { price?: number[] };
       market_cap: number | null;
     }> = await res.json();
 
@@ -50,6 +61,8 @@ export async function fetchTopMarkets(perPage = 100): Promise<Listing[]> {
       symbol: r.symbol.toUpperCase(),
       name: r.name,
       image: r.image ?? null,
+      change7dPct: r.price_change_percentage_7d_in_currency ?? null,
+      spark: downsample(r.sparkline_in_7d?.price, 28),
       priceUsd: r.current_price,
       change24hPct: r.price_change_percentage_24h,
       marketCapUsd: r.market_cap,

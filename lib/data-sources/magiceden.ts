@@ -22,7 +22,7 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
 // dead ones (zero listings), so look at a fixed pool, keep the active ones,
 // and rank them by 7-day volume. 60 stats lookups per refresh stays under
 // Magic Eden's 120 requests/minute/IP limit.
-const POOL_SIZE = 60;
+const POOL_SIZE = 100;
 
 export async function fetchMagicEdenCollections(limit = 40): Promise<NftCollection[]> {
   try {
@@ -57,9 +57,13 @@ export async function fetchMagicEdenCollections(limit = 40): Promise<NftCollecti
 
     // The list endpoint carries no floor or volume, so fill both in from each
     // collection's stats endpoint, in batches of 10.
-    for (let i = 0; i < collections.length; i += 10) {
+    // 100 lookups in five bursts of 20 (~2s total): fast enough for a serverless
+    // time budget, and under Magic Eden's 120 requests/minute/IP as long as
+    // refreshes aren't stacked within the same minute (the CDN window prevents that).
+    for (let i = 0; i < collections.length; i += 20) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 100));
       await Promise.all(
-        collections.slice(i, i + 10).map(async (c) => {
+        collections.slice(i, i + 20).map(async (c) => {
           if (!c.slug) return;
           const stats = await fetchCollectionStats(c.slug);
           c.floorPrice = stats.floorPrice;

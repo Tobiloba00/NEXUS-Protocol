@@ -44,7 +44,7 @@ export default async function NftDetailPage({
       </Link>
 
       <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
-        <div className="overflow-hidden rounded-[24px] bg-surface-2">
+        <div className="self-start overflow-hidden rounded-[24px] bg-surface-2">
           <TokenIcon src={token.image} alt={token.name} className="aspect-square w-full" rounded={false} />
         </div>
 
