@@ -1,11 +1,11 @@
 import type { LucideIcon } from "lucide-react";
-import { House, ChartNoAxesCombined, Sparkles, Image, Vote, Bell, Newspaper } from "lucide-react";
+import { House, ChartNoAxesCombined, Rocket, Image, Vote, Bell, Newspaper } from "lucide-react";
 
 export type NavItem = { label: string; href: string; icon: LucideIcon };
 
 const HOME: NavItem = { label: "Home", href: "/", icon: House };
 const MARKETS: NavItem = { label: "Markets", href: "/markets", icon: ChartNoAxesCombined };
-const NEW_COINS: NavItem = { label: "New Coins", href: "/new-listings", icon: Sparkles };
+const NEW_COINS: NavItem = { label: "New Coins", href: "/new-listings", icon: Rocket };
 const NFTS: NavItem = { label: "NFTs", href: "/nft", icon: Image };
 const PREDICTIONS: NavItem = { label: "Predictions", href: "/predictions", icon: Vote };
 const NEWS: NavItem = { label: "News", href: "/news", icon: Newspaper };

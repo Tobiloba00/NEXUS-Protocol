@@ -350,54 +350,79 @@ button.list-row:hover {
   border-radius: 9999px;
   overflow: hidden;
   isolation: isolate;
-  background: #1d6bff;
+  background: radial-gradient(circle at 32% 24%, #3a474d 0%, #141b1f 58%, #0a0e10 100%);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.55),
-    inset 0 -7px 14px rgba(0, 20, 90, 0.38),
-    0 10px 26px -8px rgba(30, 100, 255, 0.75);
+    inset 0 1px 1px rgba(255, 255, 255, 0.32),
+    inset 0 -8px 16px rgba(0, 0, 0, 0.55),
+    0 10px 26px -8px rgba(45, 212, 191, 0.55);
 }
+/* a faint teal/amber haze that slowly drifts behind the glyph */
 .nexus-orb__aurora {
   position: absolute;
-  inset: -35%;
+  inset: -30%;
   background:
-    radial-gradient(38% 38% at 28% 30%, #8be9ff 0%, transparent 70%),
-    radial-gradient(42% 42% at 74% 28%, #b79cff 0%, transparent 72%),
-    radial-gradient(48% 48% at 52% 80%, #22d3ee 0%, transparent 70%),
-    radial-gradient(40% 40% at 85% 75%, #5e5ce6 0%, transparent 70%);
-  filter: blur(5px);
-  animation: orb-drift 9s ease-in-out infinite alternate;
+    radial-gradient(42% 42% at 25% 78%, rgba(45, 212, 191, 0.55) 0%, transparent 70%),
+    radial-gradient(40% 40% at 80% 20%, rgba(52, 211, 153, 0.32) 0%, transparent 72%),
+    radial-gradient(34% 34% at 78% 82%, rgba(251, 191, 36, 0.22) 0%, transparent 70%);
+  filter: blur(7px);
+  animation: orb-drift 11s ease-in-out infinite alternate;
 }
 .nexus-orb::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.65), transparent 42%);
+  background: radial-gradient(circle at 30% 16%, rgba(255, 255, 255, 0.42), transparent 40%);
   mix-blend-mode: soft-light;
   pointer-events: none;
 }
-.nexus-orb__spark {
+.nexus-orb__glyph {
   position: relative;
   z-index: 1;
-  filter: drop-shadow(0 1px 4px rgba(0, 30, 120, 0.45));
-  animation: orb-twinkle 3.2s ease-in-out infinite;
+  overflow: visible;
+}
+.nexus-orb__line {
+  stroke: rgba(255, 255, 255, 0.78);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.nexus-orb__pulse {
+  stroke: #5eead4;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 13 87;
+  animation: orb-travel 2.8s linear infinite;
+  filter: drop-shadow(0 0 3px rgba(45, 212, 191, 0.95));
+}
+.nexus-orb__node {
+  fill: #fff;
+  filter: drop-shadow(0 0 2.5px rgba(94, 234, 212, 0.9));
+  animation: orb-node 2.8s ease-in-out infinite;
 }
 @keyframes orb-drift {
   0% {
     transform: rotate(0deg) scale(1);
   }
   100% {
-    transform: rotate(200deg) scale(1.1);
+    transform: rotate(160deg) scale(1.1);
   }
 }
-@keyframes orb-twinkle {
+@keyframes orb-travel {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes orb-node {
   0%,
   100% {
-    transform: scale(1);
-    opacity: 0.95;
+    opacity: 0.8;
   }
   50% {
-    transform: scale(1.14);
     opacity: 1;
   }
 }
@@ -418,9 +443,14 @@ button.list-row:hover {
 }
 @media (prefers-reduced-motion: reduce) {
   .nexus-orb__aurora,
-  .nexus-orb__spark,
+  .nexus-orb__pulse,
+  .nexus-orb__node,
   .sheet-in {
     animation: none;
+  }
+  .nexus-orb__pulse {
+    stroke-dasharray: none;
+    opacity: 0.55;
   }
 }
 

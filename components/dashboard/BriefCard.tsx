@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { NexusMark } from "@/components/ui/NexusMark";
 import type { Brief } from "@/lib/ai/brief";
 
 function formatDay(day: string) {
@@ -44,7 +44,7 @@ export function BriefCard({ brief }: { brief: Brief }) {
         </button>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line pt-3.5">
           <span className="inline-flex items-start gap-1.5 text-[12.5px] leading-snug text-ink-400">
-            <Sparkles className="mt-[2px] h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+            <NexusMark size={14} className="mt-[1px] shrink-0" />
             Written by AI from live NEXUS data · information only, not financial advice · no liability for losses
           </span>
           <Link href="/ask" className="press text-[14px] font-medium text-accent">
